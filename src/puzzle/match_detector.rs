@@ -4,7 +4,7 @@ use crate::bridge::MatchEvent;
 
 pub fn detect_matches(
     mut commands: Commands,
-    board: Res<PuzzleBoard>,
+    _board: Res<PuzzleBoard>,
     tiles: Query<(Entity, &GridPosition, &TileType), (With<Tile>, Without<Matched>)>,
 ) {
     let mut matched_positions: Vec<(usize, usize)> = Vec::new();

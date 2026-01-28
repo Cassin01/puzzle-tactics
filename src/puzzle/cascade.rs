@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use super::{PuzzleBoard, Tile, TileType, GridPosition, Falling};
+use super::{PuzzleBoard, Tile, TileType, GridPosition};
 
 pub fn apply_gravity(
-    mut commands: Commands,
+    _commands: Commands,
     mut board: ResMut<PuzzleBoard>,
     mut tiles: Query<(Entity, &mut GridPosition, &mut Transform), With<Tile>>,
 ) {

@@ -32,11 +32,63 @@ pub fn targeting_system(
 }
 
 pub fn movement_system(
-    _time: Res<Time>,
-    grid: Res<BattleGrid>,
-    units: Query<(Entity, &HexPosition, &UnitStats, &Target), With<Unit>>,
+    mut grid: ResMut<BattleGrid>,
+    mut units: Query<(Entity, &mut HexPosition, &UnitStats, &Target, &mut Transform), With<Unit>>,
 ) {
-    let _ = (grid, units);
+    let unit_positions: std::collections::HashMap<Entity, HexPosition> = units
+        .iter()
+        .map(|(e, pos, _, _, _)| (e, *pos))
+        .collect();
+
+    let mut movements: Vec<(Entity, HexPosition, HexPosition)> = Vec::new();
+
+    for (entity, pos, stats, target, _) in units.iter() {
+        let Some(target_entity) = target.0 else { continue };
+        let Some(target_pos) = unit_positions.get(&target_entity) else { continue };
+
+        let distance = pos.distance(target_pos);
+        if distance <= stats.attack_range {
+            continue;
+        }
+
+        if let Some(next_pos) = find_best_move(&grid, &pos, target_pos) {
+            if !grid.is_occupied(&next_pos) {
+                movements.push((entity, *pos, next_pos));
+            }
+        }
+    }
+
+    for (entity, from, to) in movements {
+        if grid.move_unit(&from, &to) {
+            if let Ok((_, mut pos, _, _, mut transform)) = units.get_mut(entity) {
+                *pos = to;
+                let world_pos = grid.axial_to_pixel(&to);
+                transform.translation = world_pos.extend(1.0);
+            }
+        }
+    }
+}
+
+fn find_best_move(
+    grid: &BattleGrid,
+    from: &HexPosition,
+    target: &HexPosition,
+) -> Option<HexPosition> {
+    let neighbors = from.neighbors();
+    let mut best: Option<(HexPosition, i32)> = None;
+
+    for neighbor in neighbors {
+        if !grid.is_valid_position(&neighbor) || grid.is_occupied(&neighbor) {
+            continue;
+        }
+
+        let dist = neighbor.distance(target);
+        if best.is_none() || dist < best.unwrap().1 {
+            best = Some((neighbor, dist));
+        }
+    }
+
+    best.map(|(pos, _)| pos)
 }
 
 pub fn attack_system(

@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::battle::{ActiveSynergies, SynergyLevel};
+use crate::battle::{ActiveSynergies, SynergyLevel, WaveManager, GameResult};
 use crate::puzzle::TileType;
 
 #[derive(Resource, Default)]
@@ -9,7 +9,13 @@ pub struct Score(pub u32);
 pub struct ScoreText;
 
 #[derive(Component)]
+pub struct WaveText;
+
+#[derive(Component)]
 pub struct SynergyDisplay;
+
+#[derive(Component)]
+pub struct GameOverScreen;
 
 pub fn setup_hud(mut commands: Commands) {
     commands.insert_resource(Score::default());
@@ -20,10 +26,21 @@ pub fn setup_hud(mut commands: Commands) {
                 position_type: PositionType::Absolute,
                 left: Val::Px(10.0),
                 top: Val::Px(10.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
                 ..default()
             },
         ))
         .with_children(|parent| {
+            parent.spawn((
+                Text::new("Wave: 0"),
+                TextFont {
+                    font_size: 28.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 0.8, 0.2)),
+                WaveText,
+            ));
             parent.spawn((
                 Text::new("Score: 0"),
                 TextFont {
@@ -55,6 +72,17 @@ pub fn update_score_display(
     if score.is_changed() {
         for mut text in query.iter_mut() {
             **text = format!("Score: {}", score.0);
+        }
+    }
+}
+
+pub fn update_wave_display(
+    wave_manager: Res<WaveManager>,
+    mut query: Query<&mut Text, With<WaveText>>,
+) {
+    if wave_manager.is_changed() {
+        for mut text in query.iter_mut() {
+            **text = format!("Wave: {}", wave_manager.current_wave);
         }
     }
 }
@@ -104,4 +132,53 @@ pub fn update_synergy_display(
             ));
         }
     });
+}
+
+pub fn show_game_over_screen(
+    mut commands: Commands,
+    game_result: Res<GameResult>,
+    existing_screen: Query<Entity, With<GameOverScreen>>,
+) {
+    if !game_result.game_ended || !existing_screen.is_empty() {
+        return;
+    }
+
+    let (title, color) = if game_result.victory {
+        ("VICTORY!", Color::srgb(0.2, 0.9, 0.3))
+    } else {
+        ("GAME OVER", Color::srgb(0.9, 0.2, 0.2))
+    };
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+            GameOverScreen,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(title),
+                TextFont {
+                    font_size: 64.0,
+                    ..default()
+                },
+                TextColor(color),
+            ));
+            parent.spawn((
+                Text::new(format!("Waves Completed: {}", game_result.waves_completed)),
+                TextFont {
+                    font_size: 32.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
 }
