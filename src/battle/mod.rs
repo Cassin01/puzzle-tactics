@@ -4,6 +4,7 @@ mod combat;
 mod synergy;
 mod wave;
 mod game_result;
+mod damage_popup;
 
 use crate::prelude::*;
 
@@ -12,6 +13,7 @@ pub use unit::{Unit, UnitStats, UnitType, StarRank, Team, Target, AttackCooldown
 pub use synergy::{ActiveSynergies, SynergyLevel};
 pub use wave::{WaveManager, BombDamageEvent};
 pub use game_result::{GameResult, WaveCompleteEvent, GameOverEvent};
+pub use damage_popup::{DamagePopup, DamagePopupEvent};
 
 pub struct BattlePlugin;
 
@@ -24,22 +26,25 @@ impl Plugin for BattlePlugin {
             .add_observer(game_result::handle_wave_complete)
             .add_observer(game_result::handle_game_over)
             .add_observer(wave::handle_bomb_damage)
+            .add_observer(damage_popup::spawn_damage_popup)
             .add_systems(Startup, hex_grid::setup_battle_grid)
             .add_systems(
                 Update,
                 (
                     wave::wave_spawner_system,
                     wave::bomb_countdown_system,
-                    unit::spawn_health_bars,
                     combat::targeting_system,
                     combat::movement_system,
                     combat::attack_system,
                     combat::ability_system,
                     combat::death_system,
+                    combat::despawn_attack_lines,
+                    unit::spawn_health_bars,
                     unit::update_health_bars,
                     synergy::update_synergies,
                     synergy::apply_synergy_bonuses,
                     game_result::check_game_result,
+                    damage_popup::animate_damage_popup,
                 )
                     .chain()
                     .run_if(in_state(GameState::Playing)),

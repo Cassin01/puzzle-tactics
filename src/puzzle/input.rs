@@ -2,8 +2,17 @@ use crate::prelude::*;
 use crate::camera::MainCamera;
 use super::{PuzzleBoard, Tile, GridPosition, Selected};
 
+const SWAP_DURATION: f32 = 0.2;
+
 #[derive(Resource, Default)]
 pub struct SelectedTile(pub Option<(usize, usize)>);
+
+#[derive(Component)]
+pub struct SwapAnimation {
+    pub start_pos: Vec2,
+    pub end_pos: Vec2,
+    pub timer: Timer,
+}
 
 pub fn handle_tile_click(
     mut commands: Commands,
@@ -67,8 +76,9 @@ pub struct SwapTilesEvent {
 
 pub fn handle_tile_swap(
     trigger: Trigger<SwapTilesEvent>,
+    mut commands: Commands,
     mut board: ResMut<PuzzleBoard>,
-    mut tiles: Query<(&mut GridPosition, &mut Transform), With<Tile>>,
+    mut tiles: Query<(&mut GridPosition, &Transform), With<Tile>>,
 ) {
     let event = trigger.event();
     let from = event.from;
@@ -80,20 +90,48 @@ pub fn handle_tile_swap(
     board.swap(from, to);
 
     if let Some(entity) = from_entity {
-        if let Ok((mut pos, mut transform)) = tiles.get_mut(entity) {
+        if let Ok((mut pos, transform)) = tiles.get_mut(entity) {
+            let start_pos = transform.translation.truncate();
+            let end_pos = board.grid_to_world(to.0, to.1);
             pos.x = to.0;
             pos.y = to.1;
-            let world = board.grid_to_world(to.0, to.1);
-            transform.translation = world.extend(0.0);
+            commands.entity(entity).insert(SwapAnimation {
+                start_pos,
+                end_pos,
+                timer: Timer::from_seconds(SWAP_DURATION, TimerMode::Once),
+            });
         }
     }
 
     if let Some(entity) = to_entity {
-        if let Ok((mut pos, mut transform)) = tiles.get_mut(entity) {
+        if let Ok((mut pos, transform)) = tiles.get_mut(entity) {
+            let start_pos = transform.translation.truncate();
+            let end_pos = board.grid_to_world(from.0, from.1);
             pos.x = from.0;
             pos.y = from.1;
-            let world = board.grid_to_world(from.0, from.1);
-            transform.translation = world.extend(0.0);
+            commands.entity(entity).insert(SwapAnimation {
+                start_pos,
+                end_pos,
+                timer: Timer::from_seconds(SWAP_DURATION, TimerMode::Once),
+            });
+        }
+    }
+}
+
+pub fn animate_swap(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Transform, &mut SwapAnimation)>,
+) {
+    for (entity, mut transform, mut anim) in query.iter_mut() {
+        anim.timer.tick(time.delta());
+        let progress = anim.timer.fraction();
+        let current_pos = anim.start_pos.lerp(anim.end_pos, progress);
+        transform.translation = current_pos.extend(transform.translation.z);
+
+        if anim.timer.finished() {
+            transform.translation = anim.end_pos.extend(transform.translation.z);
+            commands.entity(entity).remove::<SwapAnimation>();
         }
     }
 }

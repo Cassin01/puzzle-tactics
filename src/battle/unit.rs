@@ -109,7 +109,8 @@ impl UnitStats {
     }
 
     pub fn take_damage(&mut self, amount: f32) {
-        self.health = (self.health - amount).max(0.0);
+        let reduced = (amount - self.defense).max(1.0);
+        self.health = (self.health - reduced).max(0.0);
     }
 
     pub fn gain_mana(&mut self, amount: f32) {
@@ -147,9 +148,13 @@ pub struct HealthBarBackground;
 
 pub fn spawn_health_bars(
     mut commands: Commands,
-    units: Query<Entity, Added<Unit>>,
+    units: Query<(Entity, &UnitStats), (With<Unit>, Without<Children>)>,
 ) {
-    for entity in units.iter() {
+    for (entity, stats) in units.iter() {
+        // 死亡済みユニットはスキップ
+        if stats.is_dead() {
+            continue;
+        }
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 HealthBarBackground,

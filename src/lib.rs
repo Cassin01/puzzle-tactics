@@ -6,6 +6,7 @@ pub mod puzzle;
 pub mod battle;
 pub mod bridge;
 pub mod ui;
+pub mod audio;
 
 use prelude::*;
 use camera::setup_cameras;
@@ -22,6 +23,7 @@ impl Plugin for GamePlugin {
                 battle::BattlePlugin,
                 bridge::BridgePlugin,
                 ui::UIPlugin,
+                audio::AudioPlugin,
             ));
     }
 }

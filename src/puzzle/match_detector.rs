@@ -102,11 +102,11 @@ pub fn remove_matched_tiles(
     // Clear ice obstacles adjacent to matched tiles
     for (x, y) in &matched_positions {
         for (dx, dy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
-            let nx = (*x as i32 + dx) as usize;
-            let ny = (*y as i32 + dy) as usize;
-            if nx < PUZZLE_BOARD_SIZE && ny < PUZZLE_BOARD_SIZE {
-                if board.has_ice(nx, ny) {
-                    board.clear_obstacle(nx, ny);
+            let nx = *x as i32 + dx;
+            let ny = *y as i32 + dy;
+            if nx >= 0 && ny >= 0 && (nx as usize) < PUZZLE_BOARD_SIZE && (ny as usize) < PUZZLE_BOARD_SIZE {
+                if board.has_ice(nx as usize, ny as usize) {
+                    board.clear_obstacle(nx as usize, ny as usize);
                 }
             }
         }

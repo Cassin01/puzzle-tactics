@@ -1,4 +1,5 @@
 mod hud;
+mod pause_menu;
 
 use crate::prelude::*;
 
@@ -20,6 +21,21 @@ impl Plugin for UIPlugin {
             .add_systems(
                 Update,
                 hud::show_game_over_screen.run_if(in_state(GameState::GameOver)),
+            )
+            .add_systems(
+                Update,
+                pause_menu::handle_pause_input
+                    .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
+            )
+            .add_systems(OnEnter(GameState::Paused), pause_menu::setup_pause_menu)
+            .add_systems(OnExit(GameState::Paused), pause_menu::cleanup_pause_menu)
+            .add_systems(
+                Update,
+                (
+                    pause_menu::handle_resume_button,
+                    pause_menu::handle_quit_button,
+                )
+                    .run_if(in_state(GameState::Paused)),
             );
     }
 }

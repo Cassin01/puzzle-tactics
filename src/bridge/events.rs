@@ -91,8 +91,8 @@ pub fn summon_unit(
         if star < 3 {
             grid.remove_unit(&pos1);
             grid.remove_unit(&pos2);
-            commands.entity(e1).despawn();
-            commands.entity(e2).despawn();
+            commands.entity(e1).despawn_recursive();
+            commands.entity(e2).despawn_recursive();
 
             if let Some(new_pos) = grid.find_empty_position() {
                 spawn_unit_at(&mut commands, &mut grid, event.unit_type, star + 1, new_pos, Team::Player);

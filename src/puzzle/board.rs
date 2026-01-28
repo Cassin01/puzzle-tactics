@@ -117,7 +117,7 @@ pub fn setup_puzzle_board(mut commands: Commands) {
                         custom_size: Some(Vec2::splat(TILE_SIZE)),
                         ..default()
                     },
-                    Transform::from_translation(pos.extend(0.0)),
+                    Transform::from_translation(pos.extend(0.1)),
                     Visibility::default(),
                 ))
                 .id();

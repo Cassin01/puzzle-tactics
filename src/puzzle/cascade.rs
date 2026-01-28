@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::bridge::ManaSupplyEvent;
 use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched};
+use super::input::SwapAnimation;
 
 #[derive(Resource, Default)]
 pub struct CascadeState {
@@ -27,8 +28,14 @@ pub fn apply_gravity(
     mut cascade_state: ResMut<CascadeState>,
     mut board: ResMut<PuzzleBoard>,
     mut tiles: Query<(Entity, &mut GridPosition, &mut Transform), With<Tile>>,
+    swap_anims: Query<Entity, With<SwapAnimation>>,
 ) {
     if !cascade_state.pending_gravity {
+        return;
+    }
+
+    // スワップアニメーション中は待機（pending_gravity は維持）
+    if !swap_anims.is_empty() {
         return;
     }
 
@@ -44,7 +51,7 @@ pub fn apply_gravity(
                     if let Ok((_, mut pos, mut transform)) = tiles.get_mut(entity) {
                         pos.y = write_y;
                         let target = board.grid_to_world(x, write_y);
-                        transform.translation = target.extend(0.0);
+                        transform.translation = target.extend(0.1);
                     }
                 }
                 write_y += 1;
@@ -81,7 +88,7 @@ pub fn spawn_new_tiles(
                             custom_size: Some(Vec2::splat(TILE_SIZE)),
                             ..default()
                         },
-                        Transform::from_translation(pos.extend(0.0)),
+                        Transform::from_translation(pos.extend(0.1)),
                         Visibility::default(),
                     ))
                     .id();

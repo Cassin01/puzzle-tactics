@@ -24,6 +24,7 @@ impl Plugin for PuzzlePlugin {
                 Update,
                 (
                     input::handle_tile_click,
+                    input::animate_swap,
                     highlight_selected_tile,
                     match_detector::detect_matches,
                     cascade::start_cascade,
