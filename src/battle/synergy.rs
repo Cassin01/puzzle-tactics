@@ -73,8 +73,65 @@ pub fn apply_synergy_bonuses(
         }
 
         let level = synergies.get_level(unit_type.0);
+        if level == SynergyLevel::None {
+            continue;
+        }
+
         let multiplier = level.bonus_multiplier();
 
-        stats.attack *= multiplier;
+        match unit_type.0 {
+            TileType::Red => {
+                // Warrior: attack +20%, health +10%
+                let attack_bonus = 1.0 + 0.20 * (multiplier - 1.0) / 0.15;
+                let health_bonus = 1.0 + 0.10 * (multiplier - 1.0) / 0.15;
+                stats.attack *= attack_bonus;
+                stats.health *= health_bonus;
+                stats.max_health *= health_bonus;
+            }
+            TileType::Blue => {
+                // Tank: health +30%, defense +15%
+                let health_bonus = 1.0 + 0.30 * (multiplier - 1.0) / 0.15;
+                let defense_bonus = 0.15 * (multiplier - 1.0) / 0.15;
+                stats.health *= health_bonus;
+                stats.max_health *= health_bonus;
+                stats.defense += defense_bonus * 10.0;
+            }
+            TileType::Green => {
+                // Ranger: attack_range +1, attack_speed +15%
+                let range_bonus = match level {
+                    SynergyLevel::Bronze => 1,
+                    SynergyLevel::Silver => 2,
+                    SynergyLevel::Gold => 3,
+                    _ => 0,
+                };
+                let speed_bonus = 1.0 + 0.15 * (multiplier - 1.0) / 0.15;
+                stats.attack_range += range_bonus;
+                stats.attack_speed *= speed_bonus;
+            }
+            TileType::Yellow => {
+                // Assassin: attack +30%, crit chance
+                let attack_bonus = 1.0 + 0.30 * (multiplier - 1.0) / 0.15;
+                let crit_bonus = match level {
+                    SynergyLevel::Bronze => 0.10,
+                    SynergyLevel::Silver => 0.20,
+                    SynergyLevel::Gold => 0.30,
+                    _ => 0.0,
+                };
+                stats.attack *= attack_bonus;
+                stats.crit_chance += crit_bonus;
+            }
+            TileType::Purple => {
+                // Mage: ability_power +25%, mana_regen
+                let ap_bonus = 1.0 + 0.25 * (multiplier - 1.0) / 0.15;
+                let mana_regen_bonus = match level {
+                    SynergyLevel::Bronze => 1.2,
+                    SynergyLevel::Silver => 1.4,
+                    SynergyLevel::Gold => 1.6,
+                    _ => 1.0,
+                };
+                stats.ability_power *= ap_bonus;
+                stats.mana_regen *= mana_regen_bonus;
+            }
+        }
     }
 }

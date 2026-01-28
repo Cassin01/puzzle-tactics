@@ -13,6 +13,7 @@ impl Plugin for UIPlugin {
                     hud::update_score_display,
                     hud::update_wave_display,
                     hud::update_synergy_display,
+                    hud::update_combo_display,
                 )
                     .run_if(in_state(GameState::Playing)),
             )

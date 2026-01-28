@@ -1,5 +1,5 @@
 pub use bevy::prelude::*;
-pub use crate::state::{GameState, PhaseState};
+pub use crate::state::{GameState, PhaseState, ComboCounter};
 
 pub const WINDOW_WIDTH: f32 = 800.0;
 pub const WINDOW_HEIGHT: f32 = 900.0;

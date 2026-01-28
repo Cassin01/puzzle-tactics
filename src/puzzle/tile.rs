@@ -57,3 +57,39 @@ pub struct Falling {
 
 #[derive(Component)]
 pub struct Selected;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ObstacleType {
+    Ice,
+    Bomb,
+}
+
+#[derive(Component)]
+pub struct Obstacle {
+    pub obstacle_type: ObstacleType,
+    pub countdown: Option<u8>,
+}
+
+impl Obstacle {
+    pub fn ice() -> Self {
+        Self {
+            obstacle_type: ObstacleType::Ice,
+            countdown: None,
+        }
+    }
+
+    pub fn bomb(countdown: u8) -> Self {
+        Self {
+            obstacle_type: ObstacleType::Bomb,
+            countdown: Some(countdown),
+        }
+    }
+
+    pub fn is_ice(&self) -> bool {
+        self.obstacle_type == ObstacleType::Ice
+    }
+
+    pub fn is_bomb(&self) -> bool {
+        self.obstacle_type == ObstacleType::Bomb
+    }
+}

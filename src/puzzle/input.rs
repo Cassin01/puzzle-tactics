@@ -26,11 +26,21 @@ pub fn handle_tile_click(
 
     let Some((x, y)) = board.world_to_grid(world_pos) else { return };
 
+    // Ice tiles cannot be moved
+    if board.has_ice(x, y) {
+        return;
+    }
+
     for (entity, _) in tiles.iter() {
         commands.entity(entity).remove::<Selected>();
     }
 
     if let Some(prev) = *selected {
+        // Cannot swap if either tile has ice
+        if board.has_ice(prev.0, prev.1) {
+            *selected = None;
+            return;
+        }
         if is_adjacent(prev, (x, y)) {
             commands.trigger(SwapTilesEvent { from: prev, to: (x, y) });
         }

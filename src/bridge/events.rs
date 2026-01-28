@@ -24,6 +24,13 @@ pub struct ManaSupplyEvent {
 }
 
 #[derive(Event)]
+pub struct CoreAbilityEvent {
+    pub tile_type: TileType,
+    pub count: usize,
+    pub positions: Vec<(usize, usize)>,
+}
+
+#[derive(Event)]
 pub struct SkillOrbEvent {
     pub orb_type: SkillOrbType,
 }
@@ -162,6 +169,19 @@ pub fn handle_skill_orb(
                     stats.take_damage(50.0);
                 }
             }
+        }
+    }
+}
+
+pub fn handle_mana_supply(
+    trigger: Trigger<ManaSupplyEvent>,
+    mut units: Query<(&mut UnitStats, &Team), With<Unit>>,
+) {
+    let event = trigger.event();
+
+    for (mut stats, team) in units.iter_mut() {
+        if *team == Team::Player {
+            stats.gain_mana(event.amount);
         }
     }
 }

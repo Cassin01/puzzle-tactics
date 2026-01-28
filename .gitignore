@@ -1,0 +1,19 @@
+# Rust build artifacts
+/target/
+
+# WebAssembly output (Trunk)
+/dist/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Serena (local AI assistant state)
+.serena/

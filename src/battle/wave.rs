@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::puzzle::TileType;
+use crate::puzzle::{TileType, PuzzleBoard, GridPosition, Obstacle};
 use super::{
     Unit, UnitStats, UnitType, StarRank, Team, BattleGrid, HexPosition,
     Target, AttackCooldown,
@@ -142,4 +142,49 @@ fn spawn_enemy_unit(
         .id();
 
     grid.place_unit(pos, entity);
+}
+
+#[derive(Event)]
+pub struct BombDamageEvent {
+    pub position: (usize, usize),
+    pub damage: u32,
+}
+
+pub fn bomb_countdown_system(
+    mut commands: Commands,
+    mut board: ResMut<PuzzleBoard>,
+    mut obstacles: Query<(Entity, &GridPosition, &mut Obstacle)>,
+) {
+    for (entity, pos, mut obstacle) in obstacles.iter_mut() {
+        if obstacle.is_bomb() {
+            if let Some(ref mut countdown) = obstacle.countdown {
+                if *countdown > 0 {
+                    *countdown -= 1;
+                } else {
+                    // Bomb explodes - trigger damage event
+                    commands.trigger(BombDamageEvent {
+                        position: (pos.x, pos.y),
+                        damage: 10,
+                    });
+                    // Clear the obstacle from the board
+                    board.clear_obstacle(pos.x, pos.y);
+                    // Remove the obstacle component
+                    commands.entity(entity).remove::<Obstacle>();
+                }
+            }
+        }
+    }
+}
+
+pub fn handle_bomb_damage(
+    trigger: Trigger<BombDamageEvent>,
+    mut player_units: Query<&mut UnitStats, (With<Unit>, With<Team>)>,
+) {
+    let event = trigger.event();
+    let damage = event.damage as f32;
+
+    // Apply damage to player units (simplified: damage all friendly units)
+    for mut stats in player_units.iter_mut() {
+        stats.health = (stats.health - damage).max(0.0);
+    }
 }

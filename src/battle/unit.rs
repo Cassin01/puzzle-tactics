@@ -1,6 +1,10 @@
 use crate::prelude::*;
 use crate::puzzle::TileType;
 
+const HEALTH_BAR_WIDTH: f32 = 30.0;
+const HEALTH_BAR_HEIGHT: f32 = 4.0;
+const HEALTH_BAR_OFFSET_Y: f32 = 25.0;
+
 #[derive(Component)]
 pub struct Unit;
 
@@ -14,6 +18,10 @@ pub struct UnitStats {
     pub mana: f32,
     pub max_mana: f32,
     pub move_speed: f32,
+    pub defense: f32,
+    pub crit_chance: f32,
+    pub ability_power: f32,
+    pub mana_regen: f32,
 }
 
 impl Default for UnitStats {
@@ -27,6 +35,10 @@ impl Default for UnitStats {
             mana: 0.0,
             max_mana: 100.0,
             move_speed: 1.0,
+            defense: 0.0,
+            crit_chance: 0.0,
+            ability_power: 0.0,
+            mana_regen: 1.0,
         }
     }
 }
@@ -126,3 +138,65 @@ pub struct Target(pub Option<Entity>);
 
 #[derive(Component)]
 pub struct AttackCooldown(pub f32);
+
+#[derive(Component)]
+pub struct HealthBar;
+
+#[derive(Component)]
+pub struct HealthBarBackground;
+
+pub fn spawn_health_bars(
+    mut commands: Commands,
+    units: Query<Entity, Added<Unit>>,
+) {
+    for entity in units.iter() {
+        commands.entity(entity).with_children(|parent| {
+            parent.spawn((
+                HealthBarBackground,
+                Sprite {
+                    color: Color::srgb(0.2, 0.2, 0.2),
+                    custom_size: Some(Vec2::new(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)),
+                    ..default()
+                },
+                Transform::from_translation(Vec3::new(0.0, HEALTH_BAR_OFFSET_Y, 0.1)),
+            ));
+            parent.spawn((
+                HealthBar,
+                Sprite {
+                    color: Color::srgb(0.2, 0.9, 0.2),
+                    custom_size: Some(Vec2::new(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)),
+                    ..default()
+                },
+                Transform::from_translation(Vec3::new(0.0, HEALTH_BAR_OFFSET_Y, 0.2)),
+            ));
+        });
+    }
+}
+
+pub fn update_health_bars(
+    units: Query<(&Children, &UnitStats), With<Unit>>,
+    mut health_bars: Query<&mut Sprite, With<HealthBar>>,
+) {
+    for (children, stats) in units.iter() {
+        if stats.is_dead() {
+            continue;
+        }
+        let health_ratio = (stats.health / stats.max_health).max(0.01);
+        for &child in children.iter() {
+            if let Ok(mut sprite) = health_bars.get_mut(child) {
+                sprite.custom_size = Some(Vec2::new(HEALTH_BAR_WIDTH * health_ratio, HEALTH_BAR_HEIGHT));
+                sprite.color = health_ratio_to_color(health_ratio);
+            }
+        }
+    }
+}
+
+fn health_ratio_to_color(ratio: f32) -> Color {
+    if ratio > 0.5 {
+        Color::srgb(0.2, 0.9, 0.2)
+    } else if ratio > 0.25 {
+        Color::srgb(0.9, 0.9, 0.2)
+    } else {
+        Color::srgb(0.9, 0.2, 0.2)
+    }
+}

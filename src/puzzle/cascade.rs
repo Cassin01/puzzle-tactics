@@ -1,11 +1,37 @@
 use crate::prelude::*;
-use super::{PuzzleBoard, Tile, TileType, GridPosition};
+use crate::bridge::ManaSupplyEvent;
+use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched};
+
+#[derive(Resource, Default)]
+pub struct CascadeState {
+    pub has_matches: bool,
+    pub pending_gravity: bool,
+    pub pending_spawn: bool,
+}
+
+pub fn start_cascade(
+    mut cascade_state: ResMut<CascadeState>,
+    mut next_phase: ResMut<NextState<PhaseState>>,
+    matched: Query<Entity, With<Matched>>,
+    mut combo: ResMut<ComboCounter>,
+) {
+    if !matched.is_empty() {
+        cascade_state.has_matches = true;
+        cascade_state.pending_gravity = true;
+        combo.increment();
+        next_phase.set(PhaseState::Cascading);
+    }
+}
 
 pub fn apply_gravity(
-    _commands: Commands,
+    mut cascade_state: ResMut<CascadeState>,
     mut board: ResMut<PuzzleBoard>,
     mut tiles: Query<(Entity, &mut GridPosition, &mut Transform), With<Tile>>,
 ) {
+    if !cascade_state.pending_gravity {
+        return;
+    }
+
     for x in 0..PUZZLE_BOARD_SIZE {
         let mut write_y = 0;
 
@@ -25,12 +51,20 @@ pub fn apply_gravity(
             }
         }
     }
+
+    cascade_state.pending_gravity = false;
+    cascade_state.pending_spawn = true;
 }
 
 pub fn spawn_new_tiles(
     mut commands: Commands,
     mut board: ResMut<PuzzleBoard>,
+    mut cascade_state: ResMut<CascadeState>,
 ) {
+    if !cascade_state.pending_spawn {
+        return;
+    }
+
     for x in 0..PUZZLE_BOARD_SIZE {
         for y in 0..PUZZLE_BOARD_SIZE {
             if board.get(x, y).is_none() {
@@ -48,11 +82,69 @@ pub fn spawn_new_tiles(
                             ..default()
                         },
                         Transform::from_translation(pos.extend(0.0)),
+                        Visibility::default(),
                     ))
                     .id();
 
                 board.set(x, y, Some(entity));
             }
         }
+    }
+
+    cascade_state.pending_spawn = false;
+}
+
+pub fn check_cascade_complete(
+    mut commands: Commands,
+    mut cascade_state: ResMut<CascadeState>,
+    mut next_phase: ResMut<NextState<PhaseState>>,
+    combo: Res<ComboCounter>,
+    matched: Query<Entity, With<Matched>>,
+    phase: Res<State<PhaseState>>,
+) {
+    if *phase.get() != PhaseState::Cascading {
+        return;
+    }
+
+    if cascade_state.pending_gravity || cascade_state.pending_spawn {
+        return;
+    }
+
+    if matched.is_empty() && !cascade_state.has_matches {
+        let mana_amount = calculate_mana_from_combo(combo.current);
+        if mana_amount > 0.0 {
+            commands.trigger(ManaSupplyEvent { amount: mana_amount });
+        }
+
+        next_phase.set(PhaseState::Idle);
+        cascade_state.has_matches = false;
+    } else {
+        cascade_state.has_matches = false;
+    }
+}
+
+fn calculate_mana_from_combo(combo_count: u32) -> f32 {
+    if combo_count == 0 {
+        return 0.0;
+    }
+
+    let base_mana = 10.0;
+    let combo_bonus = match combo_count {
+        1 => 1.0,
+        2 => 1.5,
+        3 => 2.0,
+        4 => 3.0,
+        _ => 3.0 + (combo_count - 4) as f32 * 0.5,
+    };
+
+    base_mana * combo_bonus
+}
+
+pub fn reset_combo_on_idle(
+    mut combo: ResMut<ComboCounter>,
+    phase: Res<State<PhaseState>>,
+) {
+    if *phase.get() == PhaseState::Idle && combo.current > 0 {
+        combo.reset();
     }
 }

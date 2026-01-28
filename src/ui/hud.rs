@@ -17,6 +17,9 @@ pub struct SynergyDisplay;
 #[derive(Component)]
 pub struct GameOverScreen;
 
+#[derive(Component)]
+pub struct ComboText;
+
 pub fn setup_hud(mut commands: Commands) {
     commands.insert_resource(Score::default());
 
@@ -63,6 +66,28 @@ pub fn setup_hud(mut commands: Commands) {
             },
             SynergyDisplay,
         ));
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Percent(50.0),
+                top: Val::Px(80.0),
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 48.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 0.8, 0.0)),
+                ComboText,
+            ));
+        });
 }
 
 pub fn update_score_display(
@@ -83,6 +108,22 @@ pub fn update_wave_display(
     if wave_manager.is_changed() {
         for mut text in query.iter_mut() {
             **text = format!("Wave: {}", wave_manager.current_wave);
+        }
+    }
+}
+
+pub fn update_combo_display(
+    combo: Res<ComboCounter>,
+    mut query: Query<(&mut Text, &mut Visibility), With<ComboText>>,
+) {
+    if combo.is_changed() {
+        for (mut text, mut visibility) in query.iter_mut() {
+            if combo.current > 1 {
+                **text = format!("{}x COMBO!", combo.current);
+                *visibility = Visibility::Visible;
+            } else {
+                *visibility = Visibility::Hidden;
+            }
         }
     }
 }

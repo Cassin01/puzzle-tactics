@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched};
-use crate::bridge::MatchEvent;
+use crate::bridge::{MatchEvent, CoreAbilityEvent};
 
 pub fn detect_matches(
     mut commands: Commands,
@@ -69,11 +69,23 @@ pub fn detect_matches(
     }
 
     for (tile_type, positions) in match_groups {
+        let is_core_adjacent = positions
+            .iter()
+            .any(|(x, y)| PuzzleBoard::is_adjacent_to_core(*x, *y) || PuzzleBoard::is_core_position(*x, *y));
+
         commands.trigger(MatchEvent {
             tile_type,
             count: positions.len(),
-            positions,
+            positions: positions.clone(),
         });
+
+        if is_core_adjacent {
+            commands.trigger(CoreAbilityEvent {
+                tile_type,
+                count: positions.len(),
+                positions,
+            });
+        }
     }
 }
 
@@ -82,6 +94,24 @@ pub fn remove_matched_tiles(
     mut board: ResMut<PuzzleBoard>,
     matched: Query<(Entity, &GridPosition), With<Matched>>,
 ) {
+    let matched_positions: Vec<(usize, usize)> = matched
+        .iter()
+        .map(|(_, pos)| (pos.x, pos.y))
+        .collect();
+
+    // Clear ice obstacles adjacent to matched tiles
+    for (x, y) in &matched_positions {
+        for (dx, dy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+            let nx = (*x as i32 + dx) as usize;
+            let ny = (*y as i32 + dy) as usize;
+            if nx < PUZZLE_BOARD_SIZE && ny < PUZZLE_BOARD_SIZE {
+                if board.has_ice(nx, ny) {
+                    board.clear_obstacle(nx, ny);
+                }
+            }
+        }
+    }
+
     for (entity, pos) in matched.iter() {
         board.set(pos.x, pos.y, None);
         commands.entity(entity).despawn();

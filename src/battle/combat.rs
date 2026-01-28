@@ -162,7 +162,7 @@ pub fn death_system(
     for (entity, pos, stats) in units.iter() {
         if stats.is_dead() {
             grid.remove_unit(pos);
-            commands.entity(entity).despawn();
+            commands.entity(entity).despawn_recursive();
         }
     }
 }
