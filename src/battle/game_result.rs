@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::audio::{VictorySoundEvent, DefeatSoundEvent};
 use super::{Unit, Team, WaveManager, HexPosition};
 
 #[derive(Event)]
@@ -90,6 +91,7 @@ pub fn check_game_result(
             victory: false,
             waves_survived: wave_manager.current_wave.saturating_sub(1),
         });
+        commands.trigger(DefeatSoundEvent);
         next_state.set(GameState::GameOver);
     }
 
@@ -101,6 +103,7 @@ pub fn check_game_result(
             victory: true,
             waves_survived: wave_manager.current_wave,
         });
+        commands.trigger(VictorySoundEvent);
         next_state.set(GameState::GameOver);
     }
 }

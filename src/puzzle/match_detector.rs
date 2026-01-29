@@ -1,10 +1,12 @@
 use crate::prelude::*;
 use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched, IceMeltEvent, BombDefuseEvent};
 use crate::bridge::{MatchEvent, CoreAbilityEvent};
+use crate::audio::MatchSoundEvent;
 
 pub fn detect_matches(
     mut commands: Commands,
     _board: Res<PuzzleBoard>,
+    combo: Res<ComboCounter>,
     tiles: Query<(Entity, &GridPosition, &TileType), (With<Tile>, Without<Matched>)>,
 ) {
     let mut matched_positions: Vec<(usize, usize)> = Vec::new();
@@ -68,6 +70,13 @@ pub fn detect_matches(
         }
     }
 
+    // Trigger sound event if there are matches
+    if !match_groups.is_empty() {
+        commands.trigger(MatchSoundEvent {
+            combo_count: combo.current,
+        });
+    }
+
     for (tile_type, positions) in match_groups {
         let is_core_adjacent = positions
             .iter()
@@ -118,6 +127,20 @@ pub fn remove_matched_tiles(
         if board.has_bomb(x, y) {
             commands.trigger(BombDefuseEvent { position: (x, y) });
             board.clear_obstacle(x, y);
+        }
+    }
+
+    // Defuse bombs adjacent to matched tiles (similar to ice melt)
+    for (x, y) in &matched_positions {
+        for (dx, dy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+            let nx = *x as i32 + dx;
+            let ny = *y as i32 + dy;
+            if nx >= 0 && ny >= 0 && (nx as usize) < PUZZLE_BOARD_SIZE && (ny as usize) < PUZZLE_BOARD_SIZE {
+                if board.has_bomb(nx as usize, ny as usize) {
+                    commands.trigger(BombDefuseEvent { position: (nx as usize, ny as usize) });
+                    board.clear_obstacle(nx as usize, ny as usize);
+                }
+            }
         }
     }
 

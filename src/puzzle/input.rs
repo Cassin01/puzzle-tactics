@@ -180,3 +180,65 @@ pub fn animate_ice_shake(
         }
     }
 }
+
+/// Calculate interpolated position for swap animation
+pub fn lerp_position(start: Vec2, end: Vec2, progress: f32) -> Vec2 {
+    start.lerp(end, progress)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_swap_animation_lerp_at_start() {
+        let start = Vec2::new(0.0, 0.0);
+        let end = Vec2::new(100.0, 50.0);
+        let result = lerp_position(start, end, 0.0);
+        assert_eq!(result, start);
+    }
+
+    #[test]
+    fn test_swap_animation_lerp_at_middle() {
+        let start = Vec2::new(0.0, 0.0);
+        let end = Vec2::new(100.0, 50.0);
+        let result = lerp_position(start, end, 0.5);
+        assert_eq!(result, Vec2::new(50.0, 25.0));
+    }
+
+    #[test]
+    fn test_swap_animation_lerp_at_end() {
+        let start = Vec2::new(0.0, 0.0);
+        let end = Vec2::new(100.0, 50.0);
+        let result = lerp_position(start, end, 1.0);
+        assert_eq!(result, end);
+    }
+
+    #[test]
+    fn test_is_adjacent_horizontal() {
+        assert!(is_adjacent((0, 0), (1, 0)));
+        assert!(is_adjacent((1, 0), (0, 0)));
+    }
+
+    #[test]
+    fn test_is_adjacent_vertical() {
+        assert!(is_adjacent((0, 0), (0, 1)));
+        assert!(is_adjacent((0, 1), (0, 0)));
+    }
+
+    #[test]
+    fn test_is_not_adjacent_diagonal() {
+        assert!(!is_adjacent((0, 0), (1, 1)));
+    }
+
+    #[test]
+    fn test_is_not_adjacent_far() {
+        assert!(!is_adjacent((0, 0), (2, 0)));
+        assert!(!is_adjacent((0, 0), (0, 2)));
+    }
+
+    #[test]
+    fn test_swap_duration_is_correct() {
+        assert_eq!(SWAP_DURATION, 0.2);
+    }
+}

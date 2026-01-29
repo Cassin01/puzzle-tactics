@@ -9,11 +9,12 @@ mod damage_popup;
 use crate::prelude::*;
 
 pub use hex_grid::{BattleGrid, HexPosition};
-pub use unit::{Unit, UnitStats, UnitType, StarRank, Team, Target, AttackCooldown, HealthBar, HealthBarBackground};
+pub use unit::{Unit, UnitStats, UnitType, StarRank, Team, Target, AttackCooldown, HealthBar, HealthBarBackground, RageBuff, SnipeBuff, StealthBuff, MeteorAbility};
 pub use synergy::{ActiveSynergies, SynergyLevel};
 pub use wave::{WaveManager, BombDamageEvent, BombExplosionEffect, BombCountdownTimer, BOMB_COUNTDOWN_INTERVAL};
 pub use game_result::{GameResult, WaveCompleteEvent, GameOverEvent};
 pub use damage_popup::{DamagePopup, DamagePopupEvent};
+pub use combat::DamageCalculator;
 
 pub struct BattlePlugin;
 
@@ -53,6 +54,11 @@ impl Plugin for BattlePlugin {
             .add_systems(
                 Update,
                 wave::animate_bomb_explosion
+                    .run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                Update,
+                combat::buff_timer_system
                     .run_if(in_state(GameState::Playing)),
             );
     }

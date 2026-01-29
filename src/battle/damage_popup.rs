@@ -61,3 +61,77 @@ pub fn animate_damage_popup(
         }
     }
 }
+
+pub const POPUP_DURATION: f32 = 0.5;
+pub const POPUP_FLOAT_DISTANCE: f32 = 50.0;
+pub const CRITICAL_FONT_SIZE: f32 = 32.0;
+pub const NORMAL_FONT_SIZE: f32 = 24.0;
+
+/// Calculate the Y offset for damage popup based on animation progress
+pub fn calculate_popup_y_offset(progress: f32) -> f32 {
+    progress * POPUP_FLOAT_DISTANCE
+}
+
+/// Calculate the alpha (opacity) for damage popup based on animation progress
+pub fn calculate_popup_alpha(progress: f32) -> f32 {
+    1.0 - progress
+}
+
+/// Determine font size based on critical hit status
+pub fn get_popup_font_size(is_critical: bool) -> f32 {
+    if is_critical {
+        CRITICAL_FONT_SIZE
+    } else {
+        NORMAL_FONT_SIZE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_popup_y_offset_at_start() {
+        assert_eq!(calculate_popup_y_offset(0.0), 0.0);
+    }
+
+    #[test]
+    fn test_popup_y_offset_at_middle() {
+        assert_eq!(calculate_popup_y_offset(0.5), 25.0);
+    }
+
+    #[test]
+    fn test_popup_y_offset_at_end() {
+        assert_eq!(calculate_popup_y_offset(1.0), 50.0);
+    }
+
+    #[test]
+    fn test_popup_alpha_at_start() {
+        assert_eq!(calculate_popup_alpha(0.0), 1.0);
+    }
+
+    #[test]
+    fn test_popup_alpha_at_middle() {
+        assert_eq!(calculate_popup_alpha(0.5), 0.5);
+    }
+
+    #[test]
+    fn test_popup_alpha_at_end() {
+        assert_eq!(calculate_popup_alpha(1.0), 0.0);
+    }
+
+    #[test]
+    fn test_critical_font_size() {
+        assert_eq!(get_popup_font_size(true), 32.0);
+    }
+
+    #[test]
+    fn test_normal_font_size() {
+        assert_eq!(get_popup_font_size(false), 24.0);
+    }
+
+    #[test]
+    fn test_popup_duration_is_half_second() {
+        assert_eq!(POPUP_DURATION, 0.5);
+    }
+}

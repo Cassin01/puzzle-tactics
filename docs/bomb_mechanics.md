@@ -83,7 +83,74 @@ if obstacle.is_bomb() {
 
 ---
 
-## 3. 爆発効果
+## 3. 消去条件（Defuse）
+
+爆弾はカウントダウンが0になる前に消去（解除）することができる。
+
+### 消去方法
+
+#### 1. 直接マッチ
+爆弾が置かれているタイルでマッチが成立した場合、爆弾は消去される。
+
+#### 2. 隣接マッチ（v1.1.0追加）
+爆弾に**隣接する**タイルでマッチが成立した場合、爆弾は消去される。
+これは氷（Ice）の消去ロジックと同様の動作である。
+
+```
+隣接判定（上下左右のみ、斜めは含まない）:
+    [  ]  ← 隣接
+[  ][💣][  ] ← 左右も隣接
+    [  ]  ← 隣接
+```
+
+### 実装
+```rust
+// src/puzzle/match_detector.rs - remove_matched_tiles()
+
+// 直接マッチによる消去
+for &(x, y) in &matched_positions {
+    if board.has_bomb(x, y) {
+        commands.trigger(BombDefuseEvent { position: (x, y) });
+        board.clear_obstacle(x, y);
+    }
+}
+
+// 隣接マッチによる消去（氷と同じパターン）
+for (x, y) in &matched_positions {
+    for (dx, dy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+        let nx = *x as i32 + dx;
+        let ny = *y as i32 + dy;
+        if nx >= 0 && ny >= 0 && (nx as usize) < PUZZLE_BOARD_SIZE && (ny as usize) < PUZZLE_BOARD_SIZE {
+            if board.has_bomb(nx as usize, ny as usize) {
+                commands.trigger(BombDefuseEvent { position: (nx as usize, ny as usize) });
+                board.clear_obstacle(nx as usize, ny as usize);
+            }
+        }
+    }
+}
+```
+
+### 消去時の動作
+| 項目 | 動作 |
+|------|------|
+| カウントダウン | 即座に停止 |
+| 爆発ダメージ | 発生しない |
+| イベント | `BombDefuseEvent` が発火 |
+| 視覚エフェクト | 緑色の拡大円（0.4秒） |
+
+### 消去エフェクト
+```rust
+// src/puzzle/obstacle.rs - handle_bomb_defuse()
+BombDefuseEffect { timer: 0.0, duration: 0.4 }
+Sprite {
+    color: Color::srgba(0.2, 0.9, 0.2, 0.8),  // 緑色
+    custom_size: Some(Vec2::splat(TILE_SIZE)),
+}
+```
+
+---
+
+## 4. 爆発効果
 
 ### 爆発トリガー
 カウントダウンが0になった時点で即座に爆発。
@@ -136,7 +203,7 @@ sprite.color = Color::srgba(1.0, 0.5 - progress * 0.3, 0.0, 1.0 - progress);  //
 
 ---
 
-## 4. ダメージ処理
+## 5. ダメージ処理
 
 ### ダメージ対象
 - **味方ユニット全体**にダメージを適用
@@ -163,7 +230,7 @@ pub fn handle_bomb_damage(
 
 ---
 
-## 5. 視覚表現
+## 6. 視覚表現
 
 ### 爆弾本体
 ```rust
@@ -196,7 +263,7 @@ Sprite {
 
 ---
 
-## 6. 戦略的意義
+## 7. 戦略的意義
 
 ### プレイヤーへの影響
 
@@ -224,7 +291,8 @@ Sprite {
 | ファイル | 役割 |
 |---------|------|
 | `src/battle/combat.rs` | 出現判定 (`maybe_spawn_obstacle_on_attack`) |
-| `src/puzzle/obstacle.rs` | 生成処理 (`spawn_bomb`, `BombCountdownText`) |
+| `src/puzzle/obstacle.rs` | 生成処理・消去処理 (`spawn_bomb`, `handle_bomb_defuse`, `BombDefuseEvent`) |
+| `src/puzzle/match_detector.rs` | 隣接マッチによる消去判定 (`remove_matched_tiles`) |
 | `src/battle/wave.rs` | カウントダウン・爆発処理 (`bomb_countdown_system`, `animate_bomb_explosion`, `handle_bomb_damage`) |
 | `src/puzzle/tile.rs` | `Obstacle`, `ObstacleType` 定義 |
 | `src/bridge/events.rs` | `ObstacleSpawnEvent` 定義 |

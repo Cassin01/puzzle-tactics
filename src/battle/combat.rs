@@ -1,7 +1,54 @@
 use crate::prelude::*;
 use crate::puzzle::{TileType, ObstacleType};
 use crate::bridge::ObstacleSpawnEvent;
-use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown, WaveManager};
+use crate::audio::AttackSoundEvent;
+use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown, WaveManager, RageBuff, SnipeBuff, StealthBuff, MeteorAbility, DamagePopupEvent};
+
+// ============================================================
+// Damage Calculator
+// ============================================================
+
+/// Damage calculation utility for critical hits and defense reduction
+pub struct DamageCalculator;
+
+impl DamageCalculator {
+    /// Critical hit multiplier (1.5x damage)
+    pub const CRIT_MULTIPLIER: f32 = 1.5;
+    /// Maximum defense reduction (80%)
+    pub const MAX_DEFENSE_REDUCTION: f32 = 0.8;
+    /// Minimum damage dealt
+    pub const MIN_DAMAGE: f32 = 1.0;
+
+    /// Returns the critical hit multiplier
+    pub fn crit_multiplier() -> f32 {
+        Self::CRIT_MULTIPLIER
+    }
+
+    /// Applies critical hit modifier to damage
+    pub fn apply_crit(base_damage: f32, is_crit: bool) -> f32 {
+        if is_crit {
+            base_damage * Self::CRIT_MULTIPLIER
+        } else {
+            base_damage
+        }
+    }
+
+    /// Applies defense reduction to damage
+    /// Defense is percentage-based: defense 50 = 50% reduction
+    /// Capped at 80% reduction maximum
+    pub fn apply_defense(damage: f32, defense: f32) -> f32 {
+        let reduction = (defense / 100.0).min(Self::MAX_DEFENSE_REDUCTION);
+        damage * (1.0 - reduction)
+    }
+
+    /// Full damage calculation: base * crit_multiplier * defense_reduction
+    /// Ensures minimum damage of 1.0
+    pub fn calculate(base_damage: f32, is_crit: bool, defense: f32) -> f32 {
+        let after_crit = Self::apply_crit(base_damage, is_crit);
+        let final_damage = Self::apply_defense(after_crit, defense);
+        final_damage.max(Self::MIN_DAMAGE)
+    }
+}
 
 #[derive(Component)]
 pub struct AttackLine {
@@ -10,6 +57,7 @@ pub struct AttackLine {
 
 pub fn targeting_system(
     units: Query<(Entity, &HexPosition, &Team), With<Unit>>,
+    stealth_units: Query<Entity, With<StealthBuff>>,
     mut targets: Query<&mut Target, With<Unit>>,
 ) {
     let unit_data: Vec<(Entity, HexPosition, Team)> = units
@@ -17,11 +65,19 @@ pub fn targeting_system(
         .map(|(e, p, t)| (e, *p, *t))
         .collect();
 
+    // Collect stealthed entities
+    let stealthed: std::collections::HashSet<Entity> = stealth_units.iter().collect();
+
     for (entity, pos, team) in &unit_data {
         let mut closest: Option<(Entity, i32)> = None;
 
         for (other_entity, other_pos, other_team) in &unit_data {
             if entity == other_entity || team == other_team {
+                continue;
+            }
+
+            // Skip stealthed units - they cannot be targeted
+            if stealthed.contains(other_entity) {
                 continue;
             }
 
@@ -103,24 +159,36 @@ pub fn attack_system(
     time: Res<Time>,
     wave_manager: Res<WaveManager>,
     positions: Query<&HexPosition, With<Unit>>,
+    rage_buffs: Query<(Entity, &RageBuff), With<Unit>>,
+    mut snipe_buffs: Query<(Entity, &mut SnipeBuff), With<Unit>>,
     mut param_set: ParamSet<(
-        Query<(&HexPosition, &UnitStats, &Target, &mut AttackCooldown, &Team), With<Unit>>,
+        Query<(Entity, &HexPosition, &UnitStats, &Target, &mut AttackCooldown, &Team), With<Unit>>,
         Query<&mut UnitStats, With<Unit>>,
     )>,
 ) {
     let current_wave = wave_manager.current_wave;
 
+    // Collect rage buff entities for damage calculation
+    let rage_entities: std::collections::HashSet<Entity> = rage_buffs.iter().map(|(e, _)| e).collect();
+
     // Collect attacks with team info for obstacle spawning
-    let attacks: Vec<(HexPosition, Entity, f32, Team)> = {
+    // Tuple: (attacker_entity, attacker_pos, target_entity, damage, team, is_critical)
+    let attacks: Vec<(Entity, HexPosition, Entity, f32, Team, bool)> = {
         let attackers = param_set.p0();
         attackers
             .iter()
-            .filter_map(|(pos, stats, target, cooldown, team)| {
+            .filter_map(|(entity, pos, stats, target, cooldown, team)| {
                 if cooldown.0 <= 0.0 {
                     target.0.map(|t| {
                         let is_crit = rand::random::<f32>() < stats.crit_chance;
-                        let damage = if is_crit { stats.attack * 1.5 } else { stats.attack };
-                        (*pos, t, damage, *team)
+                        let mut damage = if is_crit { stats.attack * 1.5 } else { stats.attack };
+
+                        // Apply Rage buff (ATK +20%)
+                        if rage_entities.contains(&entity) {
+                            damage *= RageBuff::ATTACK_MULTIPLIER;
+                        }
+
+                        (entity, *pos, t, damage, *team, is_crit)
                     })
                 } else {
                     None
@@ -129,9 +197,35 @@ pub fn attack_system(
             .collect()
     };
 
+    // Apply Snipe buff (2x damage on next attack) and consume it
+    // Tuple: (attacker_pos, target_entity, damage, team, is_critical)
+    let mut final_attacks: Vec<(HexPosition, Entity, f32, Team, bool)> = Vec::new();
+    for (attacker_entity, attacker_pos, target_entity, mut damage, team, is_crit) in attacks {
+        if let Ok((_, mut snipe)) = snipe_buffs.get_mut(attacker_entity) {
+            if !snipe.is_consumed() {
+                damage = snipe.apply_damage_modifier(damage / if rage_entities.contains(&attacker_entity) { RageBuff::ATTACK_MULTIPLIER } else { 1.0 });
+                // Re-apply rage if present
+                if rage_entities.contains(&attacker_entity) {
+                    damage *= RageBuff::ATTACK_MULTIPLIER;
+                }
+                snipe.consume();
+                // Remove the consumed snipe buff
+                commands.entity(attacker_entity).remove::<SnipeBuff>();
+            }
+        }
+        final_attacks.push((attacker_pos, target_entity, damage, team, is_crit));
+    }
+
+    // Trigger attack sound if there are attacks
+    if !final_attacks.is_empty() {
+        // Check if any attack was critical
+        let has_critical = final_attacks.iter().any(|(_, _, _, _, is_crit)| *is_crit);
+        commands.trigger(AttackSoundEvent { is_critical: has_critical });
+    }
+
     {
         let mut targets = param_set.p1();
-        for (attacker_pos, target_entity, damage, team) in &attacks {
+        for (attacker_pos, target_entity, damage, team, is_crit) in &final_attacks {
             if let Ok(mut target_stats) = targets.get_mut(*target_entity) {
                 target_stats.take_damage(*damage);
             }
@@ -139,6 +233,13 @@ pub fn attack_system(
                 let from = grid.axial_to_pixel(attacker_pos);
                 let to = grid.axial_to_pixel(target_pos);
                 spawn_attack_line(&mut commands, from, to);
+
+                // Spawn damage popup at target position
+                commands.trigger(DamagePopupEvent {
+                    position: to.extend(0.0),
+                    damage: *damage as i32,
+                    is_critical: *is_crit,
+                });
             }
 
             // Enemy attack triggers obstacle spawn based on wave
@@ -150,7 +251,7 @@ pub fn attack_system(
 
     {
         let mut attackers = param_set.p0();
-        for (_pos, stats, _target, mut cooldown, _team) in attackers.iter_mut() {
+        for (_entity, _pos, stats, _target, mut cooldown, _team) in attackers.iter_mut() {
             cooldown.0 -= time.delta_secs();
             if cooldown.0 <= 0.0 {
                 cooldown.0 = 1.0 / stats.attack_speed;
@@ -209,6 +310,7 @@ fn spawn_attack_line(commands: &mut Commands, from: Vec2, to: Vec2) {
 }
 
 pub fn ability_system(
+    mut commands: Commands,
     mut param_set: ParamSet<(
         Query<(Entity, &HexPosition, &mut UnitStats, &UnitType, &Team), With<Unit>>,
         Query<(Entity, &HexPosition, &mut UnitStats, &Team), With<Unit>>,
@@ -226,7 +328,7 @@ pub fn ability_system(
             .collect()
     };
 
-    // Collect potential targets for offensive abilities
+    // Collect potential targets for offensive abilities (enemies only for Meteor)
     let all_units: Vec<(Entity, HexPosition, f32, Team)> = {
         let units = param_set.p1();
         units
@@ -235,50 +337,41 @@ pub fn ability_system(
             .collect()
     };
 
-    // Determine damage to apply
+    // Determine damage to apply (for Purple/Meteor only now)
     let mut damage_list: Vec<(Entity, f32)> = Vec::new();
 
-    for (caster_entity, caster_pos, attack, ability_power, max_health, tile_type, caster_team) in &casters {
+    // Track which buffs to apply
+    let mut rage_buffs_to_add: Vec<Entity> = Vec::new();
+    let mut snipe_buffs_to_add: Vec<Entity> = Vec::new();
+    let mut stealth_buffs_to_add: Vec<Entity> = Vec::new();
+
+    for (caster_entity, _caster_pos, _attack, _ability_power, _max_health, tile_type, caster_team) in &casters {
         match tile_type {
             TileType::Red => {
-                // Warrior: AoE damage to enemies within 1 hex
-                for (target_entity, target_pos, _, target_team) in &all_units {
-                    if target_team == caster_team || target_entity == caster_entity {
-                        continue;
-                    }
-                    if caster_pos.distance(target_pos) <= 1 {
-                        damage_list.push((*target_entity, attack * 0.5));
-                    }
-                }
+                // Warrior: Rage - ATK +20% for 5 seconds
+                rage_buffs_to_add.push(*caster_entity);
+            }
+            TileType::Green => {
+                // Ranger: Snipe - next attack deals 2x damage
+                snipe_buffs_to_add.push(*caster_entity);
             }
             TileType::Yellow => {
-                // Assassin: Attack lowest HP enemy with 2x damage
-                let lowest_hp_enemy = all_units
-                    .iter()
-                    .filter(|(e, _, _, team)| team != caster_team && e != caster_entity)
-                    .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
-                if let Some((target_entity, _, _, _)) = lowest_hp_enemy {
-                    damage_list.push((*target_entity, attack * 2.0));
-                }
+                // Assassin: Stealth - untargetable for 3 seconds
+                stealth_buffs_to_add.push(*caster_entity);
             }
             TileType::Purple => {
-                // Mage: Magic attack on random enemy
-                let enemies: Vec<_> = all_units
-                    .iter()
-                    .filter(|(e, _, _, team)| team != caster_team && e != caster_entity)
-                    .collect();
-                if !enemies.is_empty() {
-                    use rand::Rng;
-                    let idx = rand::thread_rng().gen_range(0..enemies.len());
-                    let (target_entity, _, _, _) = enemies[idx];
-                    damage_list.push((*target_entity, ability_power * 1.5));
+                // Mage: Meteor - 15 damage to ALL enemies
+                for (target_entity, _, _, target_team) in &all_units {
+                    if target_team != caster_team {
+                        damage_list.push((*target_entity, MeteorAbility::damage()));
+                    }
                 }
             }
             _ => {}
         }
     }
 
-    // Apply damage and self-effects
+    // Apply Meteor damage
     {
         let mut units = param_set.p1();
         for (target_entity, damage) in damage_list {
@@ -288,25 +381,55 @@ pub fn ability_system(
         }
     }
 
-    // Apply self-buffs and reset mana
+    // Apply Blue heal and reset mana for all casters
     {
         let mut units = param_set.p0();
         for (caster_entity, _, _, _, max_health, tile_type, _) in casters {
             if let Ok((_, _, mut stats, _, _)) = units.get_mut(caster_entity) {
-                match tile_type {
-                    TileType::Blue => {
-                        // Tank: Heal 20% max HP
-                        let heal = max_health * 0.2;
-                        stats.health = (stats.health + heal).min(stats.max_health);
-                    }
-                    TileType::Green => {
-                        // Ranger: Attack speed boost (instant buff)
-                        stats.attack_speed *= 1.3;
-                    }
-                    _ => {}
+                if tile_type == TileType::Blue {
+                    // Tank: Heal 20% max HP
+                    let heal = max_health * 0.2;
+                    stats.health = (stats.health + heal).min(stats.max_health);
                 }
                 stats.mana = 0.0;
             }
+        }
+    }
+
+    // Add buff components
+    for entity in rage_buffs_to_add {
+        commands.entity(entity).insert(RageBuff::new());
+    }
+    for entity in snipe_buffs_to_add {
+        commands.entity(entity).insert(SnipeBuff::new());
+    }
+    for entity in stealth_buffs_to_add {
+        commands.entity(entity).insert(StealthBuff::new());
+    }
+}
+
+/// System to tick and expire buff timers
+pub fn buff_timer_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut rage_buffs: Query<(Entity, &mut RageBuff)>,
+    mut stealth_buffs: Query<(Entity, &mut StealthBuff)>,
+) {
+    let delta = time.delta_secs();
+
+    // Tick Rage buffs
+    for (entity, mut buff) in rage_buffs.iter_mut() {
+        buff.tick(delta);
+        if buff.is_expired() {
+            commands.entity(entity).remove::<RageBuff>();
+        }
+    }
+
+    // Tick Stealth buffs
+    for (entity, mut buff) in stealth_buffs.iter_mut() {
+        buff.tick(delta);
+        if buff.is_expired() {
+            commands.entity(entity).remove::<StealthBuff>();
         }
     }
 }

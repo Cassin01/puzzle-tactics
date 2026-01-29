@@ -125,3 +125,69 @@ fn handle_defeat_sound(
         PlaybackSettings::DESPAWN.with_volume(bevy::audio::Volume::new(settings.volume)),
     ));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_audio_settings_default() {
+        let settings = AudioSettings::default();
+        assert!(settings.enabled);
+        assert!((settings.volume - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_match_sound_event_creation() {
+        let event = MatchSoundEvent { combo_count: 5 };
+        assert_eq!(event.combo_count, 5);
+    }
+
+    #[test]
+    fn test_match_sound_event_combo_threshold() {
+        // Combo > 3 should use different sound
+        let low_combo = MatchSoundEvent { combo_count: 2 };
+        let high_combo = MatchSoundEvent { combo_count: 4 };
+
+        assert!(low_combo.combo_count <= 3);
+        assert!(high_combo.combo_count > 3);
+    }
+
+    #[test]
+    fn test_attack_sound_event_creation() {
+        let normal = AttackSoundEvent { is_critical: false };
+        let critical = AttackSoundEvent { is_critical: true };
+
+        assert!(!normal.is_critical);
+        assert!(critical.is_critical);
+    }
+
+    #[test]
+    fn test_victory_sound_event_creation() {
+        let _event = VictorySoundEvent;
+        // Unit struct, just verify it compiles
+    }
+
+    #[test]
+    fn test_defeat_sound_event_creation() {
+        let _event = DefeatSoundEvent;
+        // Unit struct, just verify it compiles
+    }
+
+    #[test]
+    fn test_audio_settings_disabled() {
+        let mut settings = AudioSettings::default();
+        settings.enabled = false;
+        assert!(!settings.enabled);
+    }
+
+    #[test]
+    fn test_audio_settings_volume_range() {
+        let mut settings = AudioSettings::default();
+        settings.volume = 0.5;
+        assert!((settings.volume - 0.5).abs() < f32::EPSILON);
+
+        settings.volume = 0.0;
+        assert!((settings.volume - 0.0).abs() < f32::EPSILON);
+    }
+}
