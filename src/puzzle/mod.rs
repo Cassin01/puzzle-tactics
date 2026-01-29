@@ -3,12 +3,14 @@ mod tile;
 mod input;
 mod match_detector;
 mod cascade;
+mod obstacle;
 
 use crate::prelude::*;
 
 pub use board::PuzzleBoard;
 pub use tile::{Tile, TileType, GridPosition, Matched, Falling, Selected, Obstacle, ObstacleType};
 pub use cascade::CascadeState;
+pub use obstacle::{ObstaclePlugin, BombCountdownText, IceOverlay, IceMeltEvent, BombDefuseEvent};
 
 const HIGHLIGHT_INTENSITY: f32 = 0.4;
 
@@ -25,6 +27,7 @@ impl Plugin for PuzzlePlugin {
                 (
                     input::handle_tile_click,
                     input::animate_swap,
+                    input::animate_ice_shake,
                     highlight_selected_tile,
                     match_detector::detect_matches,
                     cascade::start_cascade,

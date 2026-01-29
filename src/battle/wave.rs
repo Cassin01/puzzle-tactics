@@ -150,28 +150,96 @@ pub struct BombDamageEvent {
     pub damage: u32,
 }
 
+/// Component for bomb explosion visual effect
+#[derive(Component)]
+pub struct BombExplosionEffect {
+    pub timer: f32,
+    pub duration: f32,
+}
+
+/// Interval between bomb countdown decrements (in seconds)
+/// Increase this value to slow down bomb countdown
+pub const BOMB_COUNTDOWN_INTERVAL: f32 = 1.5;
+
+/// Resource to track bomb countdown timing
+#[derive(Resource)]
+pub struct BombCountdownTimer {
+    pub timer: f32,
+}
+
+impl Default for BombCountdownTimer {
+    fn default() -> Self {
+        Self { timer: 0.0 }
+    }
+}
+
 pub fn bomb_countdown_system(
     mut commands: Commands,
+    time: Res<Time>,
+    mut countdown_timer: ResMut<BombCountdownTimer>,
     mut board: ResMut<PuzzleBoard>,
     mut obstacles: Query<(Entity, &GridPosition, &mut Obstacle)>,
 ) {
+    // Timer-based countdown: only tick when interval elapsed
+    countdown_timer.timer += time.delta_secs();
+    if countdown_timer.timer < BOMB_COUNTDOWN_INTERVAL {
+        return;
+    }
+    countdown_timer.timer = 0.0;
+
     for (entity, pos, mut obstacle) in obstacles.iter_mut() {
         if obstacle.is_bomb() {
             if let Some(ref mut countdown) = obstacle.countdown {
                 if *countdown > 0 {
                     *countdown -= 1;
                 } else {
-                    // Bomb explodes - trigger damage event
+                    // Spawn explosion effect at bomb position
+                    let world_pos = board.grid_to_world(pos.x, pos.y);
+                    commands.spawn((
+                        BombExplosionEffect {
+                            timer: 0.0,
+                            duration: 0.5,
+                        },
+                        Sprite {
+                            color: Color::srgba(1.0, 0.5, 0.0, 1.0),
+                            custom_size: Some(Vec2::splat(TILE_SIZE)),
+                            ..default()
+                        },
+                        Transform::from_translation(world_pos.extend(1.0)),
+                    ));
+
+                    // Trigger damage event
                     commands.trigger(BombDamageEvent {
                         position: (pos.x, pos.y),
                         damage: 10,
                     });
                     // Clear the obstacle from the board
                     board.clear_obstacle(pos.x, pos.y);
-                    // Remove the obstacle component
-                    commands.entity(entity).remove::<Obstacle>();
+                    // Despawn the bomb entity entirely
+                    commands.entity(entity).despawn_recursive();
                 }
             }
+        }
+    }
+}
+
+/// Animates and removes bomb explosion effects
+pub fn animate_bomb_explosion(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut effects: Query<(Entity, &mut BombExplosionEffect, &mut Transform, &mut Sprite)>,
+) {
+    for (entity, mut effect, mut transform, mut sprite) in effects.iter_mut() {
+        effect.timer += time.delta_secs();
+        let progress = (effect.timer / effect.duration).min(1.0);
+
+        // Scale up and fade out
+        let scale = 1.0 + progress * 1.5;
+        transform.scale = Vec3::splat(scale);
+        sprite.color = Color::srgba(1.0, 0.5 - progress * 0.3, 0.0, 1.0 - progress);
+
+        if effect.timer >= effect.duration {
+            commands.entity(entity).despawn();
         }
     }
 }

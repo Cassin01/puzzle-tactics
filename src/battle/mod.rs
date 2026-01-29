@@ -11,7 +11,7 @@ use crate::prelude::*;
 pub use hex_grid::{BattleGrid, HexPosition};
 pub use unit::{Unit, UnitStats, UnitType, StarRank, Team, Target, AttackCooldown, HealthBar, HealthBarBackground};
 pub use synergy::{ActiveSynergies, SynergyLevel};
-pub use wave::{WaveManager, BombDamageEvent};
+pub use wave::{WaveManager, BombDamageEvent, BombExplosionEffect, BombCountdownTimer, BOMB_COUNTDOWN_INTERVAL};
 pub use game_result::{GameResult, WaveCompleteEvent, GameOverEvent};
 pub use damage_popup::{DamagePopup, DamagePopupEvent};
 
@@ -23,6 +23,7 @@ impl Plugin for BattlePlugin {
             .init_resource::<ActiveSynergies>()
             .init_resource::<WaveManager>()
             .init_resource::<GameResult>()
+            .init_resource::<wave::BombCountdownTimer>()
             .add_observer(game_result::handle_wave_complete)
             .add_observer(game_result::handle_game_over)
             .add_observer(wave::handle_bomb_damage)
@@ -47,6 +48,11 @@ impl Plugin for BattlePlugin {
                     damage_popup::animate_damage_popup,
                 )
                     .chain()
+                    .run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                Update,
+                wave::animate_bomb_explosion
                     .run_if(in_state(GameState::Playing)),
             );
     }

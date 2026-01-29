@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::puzzle::TileType;
+use crate::puzzle::{TileType, ObstacleType};
 use crate::battle::{
     Unit, UnitStats, UnitType, StarRank, Team, BattleGrid, HexPosition,
     Target, AttackCooldown,
@@ -21,6 +21,13 @@ pub struct UnitSummonEvent {
 #[derive(Event)]
 pub struct ManaSupplyEvent {
     pub amount: f32,
+}
+
+#[derive(Event)]
+pub struct ObstacleSpawnEvent {
+    pub position: (usize, usize),
+    pub obstacle_type: ObstacleType,
+    pub countdown: Option<u8>,
 }
 
 #[derive(Event)]

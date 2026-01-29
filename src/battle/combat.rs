@@ -1,6 +1,7 @@
 use crate::prelude::*;
-use crate::puzzle::TileType;
-use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown};
+use crate::puzzle::{TileType, ObstacleType};
+use crate::bridge::ObstacleSpawnEvent;
+use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown, WaveManager};
 
 #[derive(Component)]
 pub struct AttackLine {
@@ -100,22 +101,26 @@ pub fn attack_system(
     mut commands: Commands,
     grid: Res<BattleGrid>,
     time: Res<Time>,
+    wave_manager: Res<WaveManager>,
     positions: Query<&HexPosition, With<Unit>>,
     mut param_set: ParamSet<(
-        Query<(&HexPosition, &UnitStats, &Target, &mut AttackCooldown), With<Unit>>,
+        Query<(&HexPosition, &UnitStats, &Target, &mut AttackCooldown, &Team), With<Unit>>,
         Query<&mut UnitStats, With<Unit>>,
     )>,
 ) {
-    let attacks: Vec<(HexPosition, Entity, f32)> = {
+    let current_wave = wave_manager.current_wave;
+
+    // Collect attacks with team info for obstacle spawning
+    let attacks: Vec<(HexPosition, Entity, f32, Team)> = {
         let attackers = param_set.p0();
         attackers
             .iter()
-            .filter_map(|(pos, stats, target, cooldown)| {
+            .filter_map(|(pos, stats, target, cooldown, team)| {
                 if cooldown.0 <= 0.0 {
                     target.0.map(|t| {
                         let is_crit = rand::random::<f32>() < stats.crit_chance;
                         let damage = if is_crit { stats.attack * 1.5 } else { stats.attack };
-                        (*pos, t, damage)
+                        (*pos, t, damage, *team)
                     })
                 } else {
                     None
@@ -126,7 +131,7 @@ pub fn attack_system(
 
     {
         let mut targets = param_set.p1();
-        for (attacker_pos, target_entity, damage) in &attacks {
+        for (attacker_pos, target_entity, damage, team) in &attacks {
             if let Ok(mut target_stats) = targets.get_mut(*target_entity) {
                 target_stats.take_damage(*damage);
             }
@@ -135,17 +140,51 @@ pub fn attack_system(
                 let to = grid.axial_to_pixel(target_pos);
                 spawn_attack_line(&mut commands, from, to);
             }
+
+            // Enemy attack triggers obstacle spawn based on wave
+            if *team == Team::Enemy {
+                maybe_spawn_obstacle_on_attack(&mut commands, current_wave);
+            }
         }
     }
 
     {
         let mut attackers = param_set.p0();
-        for (_pos, stats, _target, mut cooldown) in attackers.iter_mut() {
+        for (_pos, stats, _target, mut cooldown, _team) in attackers.iter_mut() {
             cooldown.0 -= time.delta_secs();
             if cooldown.0 <= 0.0 {
                 cooldown.0 = 1.0 / stats.attack_speed;
             }
         }
+    }
+}
+
+/// Spawns obstacles on the puzzle board when enemies attack
+fn maybe_spawn_obstacle_on_attack(commands: &mut Commands, current_wave: u32) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
+    // Wave 5+: 15% chance to spawn bomb
+    if current_wave >= 5 && rng.gen::<f32>() < 0.15 {
+        let x = rng.gen_range(0..PUZZLE_BOARD_SIZE);
+        let y = rng.gen_range(0..PUZZLE_BOARD_SIZE);
+        commands.trigger(ObstacleSpawnEvent {
+            position: (x, y),
+            obstacle_type: ObstacleType::Bomb,
+            countdown: Some(3),
+        });
+        return;
+    }
+
+    // Wave 3+: 10% chance to spawn ice
+    if current_wave >= 3 && rng.gen::<f32>() < 0.10 {
+        let x = rng.gen_range(0..PUZZLE_BOARD_SIZE);
+        let y = rng.gen_range(0..PUZZLE_BOARD_SIZE);
+        commands.trigger(ObstacleSpawnEvent {
+            position: (x, y),
+            obstacle_type: ObstacleType::Ice,
+            countdown: None,
+        });
     }
 }
 

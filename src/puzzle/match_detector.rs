@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched};
+use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched, IceMeltEvent, BombDefuseEvent};
 use crate::bridge::{MatchEvent, CoreAbilityEvent};
 
 pub fn detect_matches(
@@ -107,13 +107,23 @@ pub fn remove_matched_tiles(
             if nx >= 0 && ny >= 0 && (nx as usize) < PUZZLE_BOARD_SIZE && (ny as usize) < PUZZLE_BOARD_SIZE {
                 if board.has_ice(nx as usize, ny as usize) {
                     board.clear_obstacle(nx as usize, ny as usize);
+                    commands.trigger(IceMeltEvent { position: (nx as usize, ny as usize) });
                 }
             }
         }
     }
 
+    // Defuse bombs on matched tiles (bomb is child, will be despawned with tile)
+    for &(x, y) in &matched_positions {
+        if board.has_bomb(x, y) {
+            commands.trigger(BombDefuseEvent { position: (x, y) });
+            board.clear_obstacle(x, y);
+        }
+    }
+
+    // Despawn matched tiles (despawn_recursive removes child bombs too)
     for (entity, pos) in matched.iter() {
         board.set(pos.x, pos.y, None);
-        commands.entity(entity).despawn();
+        commands.entity(entity).despawn_recursive();
     }
 }

@@ -14,6 +14,14 @@ pub struct SwapAnimation {
     pub timer: Timer,
 }
 
+/// Ice tile shake feedback animation when player tries to interact with frozen tile
+#[derive(Component)]
+pub struct IceShakeAnimation {
+    pub original_pos: Vec2,
+    pub timer: Timer,
+    pub shake_count: u8,
+}
+
 pub fn handle_tile_click(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -35,8 +43,16 @@ pub fn handle_tile_click(
 
     let Some((x, y)) = board.world_to_grid(world_pos) else { return };
 
-    // Ice tiles cannot be moved
+    // Ice tiles cannot be moved - trigger shake feedback
     if board.has_ice(x, y) {
+        if let Some(entity) = board.get(x, y) {
+            let tile_pos = board.grid_to_world(x, y);
+            commands.entity(entity).insert(IceShakeAnimation {
+                original_pos: tile_pos,
+                timer: Timer::from_seconds(0.05, TimerMode::Repeating),
+                shake_count: 0,
+            });
+        }
         return;
     }
 
@@ -132,6 +148,35 @@ pub fn animate_swap(
         if anim.timer.finished() {
             transform.translation = anim.end_pos.extend(transform.translation.z);
             commands.entity(entity).remove::<SwapAnimation>();
+        }
+    }
+}
+
+/// Animate ice shake feedback when player tries to interact with frozen tile
+pub fn animate_ice_shake(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Transform, &mut IceShakeAnimation)>,
+) {
+    const MAX_SHAKES: u8 = 6;
+    const SHAKE_OFFSET: f32 = 4.0;
+
+    for (entity, mut transform, mut anim) in query.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        if anim.timer.just_finished() {
+            anim.shake_count += 1;
+
+            if anim.shake_count >= MAX_SHAKES {
+                // Reset to original position and remove animation
+                transform.translation.x = anim.original_pos.x;
+                transform.translation.y = anim.original_pos.y;
+                commands.entity(entity).remove::<IceShakeAnimation>();
+            } else {
+                // Alternate shake direction
+                let offset = if anim.shake_count % 2 == 0 { SHAKE_OFFSET } else { -SHAKE_OFFSET };
+                transform.translation.x = anim.original_pos.x + offset;
+            }
         }
     }
 }

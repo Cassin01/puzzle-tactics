@@ -20,6 +20,7 @@ impl Plugin for GamePlugin {
             .add_systems(Startup, (setup_cameras, start_game))
             .add_plugins((
                 puzzle::PuzzlePlugin,
+                puzzle::ObstaclePlugin,
                 battle::BattlePlugin,
                 bridge::BridgePlugin,
                 ui::UIPlugin,

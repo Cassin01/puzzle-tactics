@@ -71,9 +71,15 @@ impl PuzzleBoard {
     }
 
     pub fn swap(&mut self, a: (usize, usize), b: (usize, usize)) {
+        // Swap tile entities
         let temp = self.grid[a.1][a.0];
         self.grid[a.1][a.0] = self.grid[b.1][b.0];
         self.grid[b.1][b.0] = temp;
+
+        // Swap obstacles (bombs move with tiles)
+        let temp_obstacle = self.obstacles[a.1][a.0];
+        self.obstacles[a.1][a.0] = self.obstacles[b.1][b.0];
+        self.obstacles[b.1][b.0] = temp_obstacle;
     }
 
     pub fn get_obstacle(&self, x: usize, y: usize) -> Option<ObstacleType> {
