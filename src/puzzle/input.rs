@@ -142,7 +142,8 @@ pub fn animate_swap(
     for (entity, mut transform, mut anim) in query.iter_mut() {
         anim.timer.tick(time.delta());
         let progress = anim.timer.fraction();
-        let current_pos = anim.start_pos.lerp(anim.end_pos, progress);
+        let eased_progress = ease_out_cubic(progress);
+        let current_pos = anim.start_pos.lerp(anim.end_pos, eased_progress);
         transform.translation = current_pos.extend(transform.translation.z);
 
         if anim.timer.finished() {
@@ -184,6 +185,13 @@ pub fn animate_ice_shake(
 /// Calculate interpolated position for swap animation
 pub fn lerp_position(start: Vec2, end: Vec2, progress: f32) -> Vec2 {
     start.lerp(end, progress)
+}
+
+/// Easing function: ease-out cubic
+/// Creates smooth deceleration effect (fast start, slow end)
+/// Formula: 1 - (1 - t)^3
+pub fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
 }
 
 #[cfg(test)]
@@ -240,5 +248,32 @@ mod tests {
     #[test]
     fn test_swap_duration_is_correct() {
         assert_eq!(SWAP_DURATION, 0.2);
+    }
+
+    // Easing function tests (TDD)
+    #[test]
+    fn test_ease_out_cubic_at_zero() {
+        let result = ease_out_cubic(0.0);
+        assert!((result - 0.0).abs() < f32::EPSILON, "ease_out_cubic(0.0) should be 0.0");
+    }
+
+    #[test]
+    fn test_ease_out_cubic_at_one() {
+        let result = ease_out_cubic(1.0);
+        assert!((result - 1.0).abs() < f32::EPSILON, "ease_out_cubic(1.0) should be 1.0");
+    }
+
+    #[test]
+    fn test_ease_out_cubic_at_half_is_greater_than_half() {
+        let result = ease_out_cubic(0.5);
+        assert!(result > 0.5, "ease_out_cubic(0.5) should be greater than 0.5 (deceleration curve)");
+    }
+
+    #[test]
+    fn test_ease_out_cubic_monotonically_increasing() {
+        let values: Vec<f32> = (0..=10).map(|i| ease_out_cubic(i as f32 / 10.0)).collect();
+        for i in 1..values.len() {
+            assert!(values[i] >= values[i - 1], "ease_out_cubic should be monotonically increasing");
+        }
     }
 }

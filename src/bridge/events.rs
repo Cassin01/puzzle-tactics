@@ -4,6 +4,7 @@ use crate::battle::{
     Unit, UnitStats, UnitType, StarRank, Team, BattleGrid, HexPosition,
     Target, AttackCooldown,
 };
+use crate::state::SlowMoEvent;
 
 #[derive(Event)]
 pub struct MatchEvent {
@@ -96,13 +97,23 @@ pub fn summon_unit(
         let (e2, _, pos2) = same_type_units[1];
 
         if star < 3 {
+            let new_star = star + 1;
+
             grid.remove_unit(&pos1);
             grid.remove_unit(&pos2);
             commands.entity(e1).despawn_recursive();
             commands.entity(e2).despawn_recursive();
 
             if let Some(new_pos) = grid.find_empty_position() {
-                spawn_unit_at(&mut commands, &mut grid, event.unit_type, star + 1, new_pos, Team::Player);
+                spawn_unit_at(&mut commands, &mut grid, event.unit_type, new_star, new_pos, Team::Player);
+
+                // Trigger slow motion for ★3 evolution (epic moment!)
+                if new_star == 3 {
+                    commands.trigger(SlowMoEvent {
+                        scale: 0.3,
+                        duration: 1.0,
+                    });
+                }
             }
             return;
         }

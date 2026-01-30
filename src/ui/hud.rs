@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::battle::{ActiveSynergies, SynergyLevel, WaveManager, GameResult};
-use crate::puzzle::TileType;
+use crate::puzzle::{TileType, TilePreview};
 
 #[derive(Resource, Default)]
 pub struct Score(pub u32);
@@ -19,6 +19,12 @@ pub struct GameOverScreen;
 
 #[derive(Component)]
 pub struct ComboText;
+
+#[derive(Component)]
+pub struct PreviewDisplay;
+
+#[derive(Component)]
+pub struct PreviewTile(pub usize);
 
 pub fn setup_hud(mut commands: Commands) {
     commands.insert_resource(Score::default());
@@ -87,6 +93,47 @@ pub fn setup_hud(mut commands: Commands) {
                 TextColor(Color::srgb(1.0, 0.8, 0.0)),
                 ComboText,
             ));
+        });
+
+    // Preview display (right side of puzzle board)
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(50.0),
+                bottom: Val::Px(200.0),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: Val::Px(8.0),
+                ..default()
+            },
+            PreviewDisplay,
+        ))
+        .with_children(|parent| {
+            // "NEXT" label
+            parent.spawn((
+                Text::new("NEXT"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.8, 0.8, 0.8)),
+            ));
+
+            // Preview tiles (3 squares)
+            for i in 0..3 {
+                parent.spawn((
+                    Node {
+                        width: Val::Px(40.0),
+                        height: Val::Px(40.0),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BorderColor(Color::srgb(0.5, 0.5, 0.5)),
+                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    PreviewTile(i),
+                ));
+            }
         });
 }
 
@@ -173,6 +220,23 @@ pub fn update_synergy_display(
             ));
         }
     });
+}
+
+pub fn update_preview_display(
+    tile_preview: Res<TilePreview>,
+    mut preview_tiles: Query<(&PreviewTile, &mut BackgroundColor)>,
+) {
+    if !tile_preview.is_changed() {
+        return;
+    }
+
+    let tiles = tile_preview.peek_all();
+
+    for (preview_tile, mut bg_color) in preview_tiles.iter_mut() {
+        if let Some(tile_type) = tiles.get(preview_tile.0) {
+            *bg_color = BackgroundColor(tile_type.color());
+        }
+    }
 }
 
 pub fn show_game_over_screen(

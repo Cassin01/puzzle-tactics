@@ -158,3 +158,152 @@ pub fn handle_quit_button(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::input::ButtonInput;
+    use bevy::state::app::StatesPlugin;
+
+    fn setup_test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_plugins(StatesPlugin)
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_state::<GameState>()
+            .add_systems(
+                Update,
+                handle_pause_input
+                    .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
+            );
+        app
+    }
+
+    fn setup_button_test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_plugins(StatesPlugin)
+            .init_state::<GameState>()
+            .add_systems(Update, handle_resume_button.run_if(in_state(GameState::Paused)))
+            .add_systems(Update, handle_quit_button.run_if(in_state(GameState::Paused)));
+        app
+    }
+
+    #[test]
+    fn test_esc_playing_to_paused() {
+        let mut app = setup_test_app();
+
+        // Set initial state to Playing and apply
+        app.world_mut()
+            .resource_mut::<NextState<GameState>>()
+            .set(GameState::Playing);
+        app.update(); // Apply state transition
+
+        // Simulate ESC key press
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Escape);
+
+        app.update(); // System runs, sets NextState
+        app.update(); // State transition applies
+
+        // Verify state changed to Paused
+        let state = app.world().resource::<State<GameState>>();
+        assert_eq!(*state.get(), GameState::Paused);
+    }
+
+    #[test]
+    fn test_esc_paused_to_playing() {
+        let mut app = setup_test_app();
+
+        // Set initial state to Paused and apply
+        app.world_mut()
+            .resource_mut::<NextState<GameState>>()
+            .set(GameState::Paused);
+        app.update(); // Apply state transition
+
+        // Simulate ESC key press
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Escape);
+
+        app.update(); // System runs, sets NextState
+        app.update(); // State transition applies
+
+        // Verify state changed to Playing
+        let state = app.world().resource::<State<GameState>>();
+        assert_eq!(*state.get(), GameState::Playing);
+    }
+
+    #[test]
+    fn test_resume_button_transitions_to_playing() {
+        let mut app = setup_button_test_app();
+
+        // Set state to Paused and apply
+        app.world_mut()
+            .resource_mut::<NextState<GameState>>()
+            .set(GameState::Paused);
+        app.update(); // Apply state transition
+
+        // Spawn a ResumeButton with None interaction first
+        let entity = app
+            .world_mut()
+            .spawn((
+                Button,
+                ResumeButton,
+                Interaction::None,
+                BackgroundColor(Color::srgb(0.2, 0.6, 0.2)),
+            ))
+            .id();
+
+        app.update(); // Entity registered
+
+        // Change to Pressed to trigger Changed<Interaction>
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Interaction::Pressed);
+
+        app.update(); // System runs, sets NextState
+        app.update(); // State transition applies
+
+        // Verify state changed to Playing
+        let state = app.world().resource::<State<GameState>>();
+        assert_eq!(*state.get(), GameState::Playing);
+    }
+
+    #[test]
+    fn test_quit_button_transitions_to_loading() {
+        let mut app = setup_button_test_app();
+
+        // Set state to Paused and apply
+        app.world_mut()
+            .resource_mut::<NextState<GameState>>()
+            .set(GameState::Paused);
+        app.update(); // Apply state transition
+
+        // Spawn a QuitButton with None interaction first
+        let entity = app
+            .world_mut()
+            .spawn((
+                Button,
+                QuitButton,
+                Interaction::None,
+                BackgroundColor(Color::srgb(0.6, 0.2, 0.2)),
+            ))
+            .id();
+
+        app.update(); // Entity registered
+
+        // Change to Pressed to trigger Changed<Interaction>
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Interaction::Pressed);
+
+        app.update(); // System runs, sets NextState
+        app.update(); // State transition applies
+
+        // Verify state changed to Loading
+        let state = app.world().resource::<State<GameState>>();
+        assert_eq!(*state.get(), GameState::Loading);
+    }
+}

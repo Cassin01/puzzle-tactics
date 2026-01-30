@@ -4,6 +4,7 @@ mod input;
 mod match_detector;
 mod cascade;
 mod obstacle;
+mod preview;
 
 use crate::prelude::*;
 
@@ -11,6 +12,7 @@ pub use board::PuzzleBoard;
 pub use tile::{Tile, TileType, GridPosition, Matched, Falling, Selected, Obstacle, ObstacleType};
 pub use cascade::CascadeState;
 pub use obstacle::{ObstaclePlugin, BombCountdownText, IceOverlay, IceMeltEvent, BombDefuseEvent};
+pub use preview::TilePreview;
 
 const HIGHLIGHT_INTENSITY: f32 = 0.4;
 
@@ -20,6 +22,7 @@ impl Plugin for PuzzlePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CascadeState>()
             .init_resource::<ComboCounter>()
+            .init_resource::<preview::TilePreview>()
             .add_systems(Startup, board::setup_puzzle_board)
             .add_observer(input::handle_tile_swap)
             .add_systems(

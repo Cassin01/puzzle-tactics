@@ -2,7 +2,7 @@ use crate::prelude::*;
 // TileType, ObstacleType are now imported via prelude
 use crate::bridge::ObstacleSpawnEvent;
 use crate::audio::AttackSoundEvent;
-use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown, WaveManager, RageBuff, SnipeBuff, StealthBuff, MeteorAbility, DamagePopupEvent};
+use super::{Unit, UnitStats, UnitType, HexPosition, BattleGrid, Team, Target, AttackCooldown, WaveManager, RageBuff, SnipeBuff, StealthBuff, MeteorAbility, DamagePopupEvent, BattleStats};
 
 // ============================================================
 // Damage Calculator
@@ -158,11 +158,12 @@ pub fn attack_system(
     grid: Res<BattleGrid>,
     time: Res<Time>,
     wave_manager: Res<WaveManager>,
+    mut battle_stats: ResMut<BattleStats>,
     positions: Query<&HexPosition, With<Unit>>,
     rage_buffs: Query<(Entity, &RageBuff), With<Unit>>,
     mut snipe_buffs: Query<(Entity, &mut SnipeBuff), With<Unit>>,
     mut param_set: ParamSet<(
-        Query<(Entity, &HexPosition, &UnitStats, &Target, &mut AttackCooldown, &Team), With<Unit>>,
+        Query<(Entity, &HexPosition, &UnitStats, &Target, &mut AttackCooldown, &Team, &UnitType), With<Unit>>,
         Query<&mut UnitStats, With<Unit>>,
     )>,
 ) {
@@ -172,12 +173,12 @@ pub fn attack_system(
     let rage_entities: std::collections::HashSet<Entity> = rage_buffs.iter().map(|(e, _)| e).collect();
 
     // Collect attacks with team info for obstacle spawning
-    // Tuple: (attacker_entity, attacker_pos, target_entity, damage, team, is_critical)
-    let attacks: Vec<(Entity, HexPosition, Entity, f32, Team, bool)> = {
+    // Tuple: (attacker_entity, attacker_pos, target_entity, damage, team, is_critical, unit_type)
+    let attacks: Vec<(Entity, HexPosition, Entity, f32, Team, bool, TileType)> = {
         let attackers = param_set.p0();
         attackers
             .iter()
-            .filter_map(|(entity, pos, stats, target, cooldown, team)| {
+            .filter_map(|(entity, pos, stats, target, cooldown, team, unit_type)| {
                 if cooldown.0 <= 0.0 {
                     target.0.map(|t| {
                         let is_crit = rand::random::<f32>() < stats.crit_chance;
@@ -188,7 +189,7 @@ pub fn attack_system(
                             damage *= RageBuff::ATTACK_MULTIPLIER;
                         }
 
-                        (entity, *pos, t, damage, *team, is_crit)
+                        (entity, *pos, t, damage, *team, is_crit, unit_type.0)
                     })
                 } else {
                     None
@@ -198,9 +199,9 @@ pub fn attack_system(
     };
 
     // Apply Snipe buff (2x damage on next attack) and consume it
-    // Tuple: (attacker_pos, target_entity, damage, team, is_critical)
-    let mut final_attacks: Vec<(HexPosition, Entity, f32, Team, bool)> = Vec::new();
-    for (attacker_entity, attacker_pos, target_entity, mut damage, team, is_crit) in attacks {
+    // Tuple: (attacker_pos, target_entity, damage, team, is_critical, unit_type)
+    let mut final_attacks: Vec<(HexPosition, Entity, f32, Team, bool, TileType)> = Vec::new();
+    for (attacker_entity, attacker_pos, target_entity, mut damage, team, is_crit, unit_type) in attacks {
         if let Ok((_, mut snipe)) = snipe_buffs.get_mut(attacker_entity) {
             if !snipe.is_consumed() {
                 damage = snipe.apply_damage_modifier(damage / if rage_entities.contains(&attacker_entity) { RageBuff::ATTACK_MULTIPLIER } else { 1.0 });
@@ -213,19 +214,19 @@ pub fn attack_system(
                 commands.entity(attacker_entity).remove::<SnipeBuff>();
             }
         }
-        final_attacks.push((attacker_pos, target_entity, damage, team, is_crit));
+        final_attacks.push((attacker_pos, target_entity, damage, team, is_crit, unit_type));
     }
 
     // Trigger attack sound if there are attacks
     if !final_attacks.is_empty() {
         // Check if any attack was critical
-        let has_critical = final_attacks.iter().any(|(_, _, _, _, is_crit)| *is_crit);
+        let has_critical = final_attacks.iter().any(|(_, _, _, _, is_crit, _)| *is_crit);
         commands.trigger(AttackSoundEvent { is_critical: has_critical });
     }
 
     {
         let mut targets = param_set.p1();
-        for (attacker_pos, target_entity, damage, team, is_crit) in &final_attacks {
+        for (attacker_pos, target_entity, damage, team, is_crit, unit_type) in &final_attacks {
             if let Ok(mut target_stats) = targets.get_mut(*target_entity) {
                 target_stats.take_damage(*damage);
             }
@@ -242,6 +243,18 @@ pub fn attack_system(
                 });
             }
 
+            // Record battle statistics
+            match team {
+                Team::Enemy => {
+                    // Enemy dealt damage to player unit
+                    battle_stats.record_enemy_damage(*unit_type, *damage);
+                }
+                Team::Player => {
+                    // Player unit dealt damage to enemy
+                    battle_stats.record_ally_damage(*unit_type, *damage);
+                }
+            }
+
             // Enemy attack triggers obstacle spawn based on wave
             if *team == Team::Enemy {
                 maybe_spawn_obstacle_on_attack(&mut commands, current_wave);
@@ -251,7 +264,7 @@ pub fn attack_system(
 
     {
         let mut attackers = param_set.p0();
-        for (_entity, _pos, stats, _target, mut cooldown, _team) in attackers.iter_mut() {
+        for (_entity, _pos, stats, _target, mut cooldown, _team, _unit_type) in attackers.iter_mut() {
             cooldown.0 -= time.delta_secs();
             if cooldown.0 <= 0.0 {
                 cooldown.0 = 1.0 / stats.attack_speed;
@@ -437,10 +450,15 @@ pub fn buff_timer_system(
 pub fn death_system(
     mut commands: Commands,
     mut grid: ResMut<BattleGrid>,
-    units: Query<(Entity, &HexPosition, &UnitStats), With<Unit>>,
+    mut battle_stats: ResMut<BattleStats>,
+    units: Query<(Entity, &HexPosition, &UnitStats, &Team), With<Unit>>,
 ) {
-    for (entity, pos, stats) in units.iter() {
+    for (entity, pos, stats, team) in units.iter() {
         if stats.is_dead() {
+            // Record kill when enemy dies
+            if *team == Team::Enemy {
+                battle_stats.record_kill_for_top_ally();
+            }
             grid.remove_unit(pos);
             commands.entity(entity).despawn_recursive();
         }

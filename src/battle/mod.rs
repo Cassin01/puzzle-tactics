@@ -5,6 +5,7 @@ mod synergy;
 mod wave;
 mod game_result;
 mod damage_popup;
+mod battle_stats;
 
 use crate::prelude::*;
 
@@ -15,6 +16,7 @@ pub use wave::{WaveManager, BombDamageEvent, BombExplosionEffect, BombCountdownT
 pub use game_result::{GameResult, WaveCompleteEvent, GameOverEvent};
 pub use damage_popup::{DamagePopup, DamagePopupEvent};
 pub use combat::DamageCalculator;
+pub use battle_stats::BattleStats;
 
 pub struct BattlePlugin;
 
@@ -24,6 +26,7 @@ impl Plugin for BattlePlugin {
             .init_resource::<ActiveSynergies>()
             .init_resource::<WaveManager>()
             .init_resource::<GameResult>()
+            .init_resource::<BattleStats>()
             .init_resource::<wave::BombCountdownTimer>()
             .add_observer(game_result::handle_wave_complete)
             .add_observer(game_result::handle_game_over)
