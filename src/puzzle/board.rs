@@ -17,7 +17,7 @@ impl Default for PuzzleBoard {
             tile_size: TILE_SIZE,
             origin: Vec2::new(
                 -((PUZZLE_BOARD_SIZE as f32 * (TILE_SIZE + TILE_GAP)) / 2.0) + (TILE_SIZE / 2.0),
-                -WINDOW_HEIGHT / 2.0 + 50.0,
+                -WINDOW_HEIGHT / 2.0 + TILE_SIZE / 2.0 + 20.0,
             ),
         }
     }

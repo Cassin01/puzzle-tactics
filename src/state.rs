@@ -16,6 +16,7 @@ pub enum PhaseState {
     Matching,
     Cascading,
     Combating,
+    WaveBreak,
 }
 
 #[derive(Resource, Default)]
@@ -35,6 +36,39 @@ impl ComboCounter {
     pub fn reset(&mut self) {
         self.current = 0;
         self.max_this_turn = 0;
+    }
+}
+
+// ============================================================
+// Wave Break Timer (Unit Repositioning Phase)
+// ============================================================
+
+/// Duration of wave break in seconds
+pub const WAVE_BREAK_DURATION: f32 = 30.0;
+
+/// Resource for tracking wave break duration (for unit repositioning)
+#[derive(Resource)]
+pub struct WaveBreakTimer {
+    pub remaining: f32,
+}
+
+impl Default for WaveBreakTimer {
+    fn default() -> Self {
+        Self { remaining: WAVE_BREAK_DURATION }
+    }
+}
+
+impl WaveBreakTimer {
+    pub fn tick(&mut self, delta: f32) {
+        self.remaining = (self.remaining - delta).max(0.0);
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.remaining <= 0.0
+    }
+
+    pub fn reset(&mut self) {
+        self.remaining = WAVE_BREAK_DURATION;
     }
 }
 
@@ -105,6 +139,49 @@ pub struct SlowMoEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ============================================================
+    // WaveBreak State Tests
+    // ============================================================
+
+    #[test]
+    fn test_phase_state_has_wave_break_variant() {
+        // WaveBreak should be a valid PhaseState variant
+        let state = PhaseState::WaveBreak;
+        assert_eq!(state, PhaseState::WaveBreak);
+    }
+
+    #[test]
+    fn test_wave_break_timer_default() {
+        let timer = WaveBreakTimer::default();
+        assert!((timer.remaining - WAVE_BREAK_DURATION).abs() < f32::EPSILON, "Default should be WAVE_BREAK_DURATION");
+    }
+
+    #[test]
+    fn test_wave_break_timer_tick() {
+        let mut timer = WaveBreakTimer::default();
+        timer.tick(1.0);
+        assert!((timer.remaining - (WAVE_BREAK_DURATION - 1.0)).abs() < f32::EPSILON, "Should decrease by delta");
+    }
+
+    #[test]
+    fn test_wave_break_timer_finished() {
+        let mut timer = WaveBreakTimer::default();
+        timer.tick(WAVE_BREAK_DURATION);
+        assert!(timer.is_finished(), "Should be finished after WAVE_BREAK_DURATION");
+    }
+
+    #[test]
+    fn test_wave_break_timer_reset() {
+        let mut timer = WaveBreakTimer::default();
+        timer.tick(3.0);
+        timer.reset();
+        assert!((timer.remaining - WAVE_BREAK_DURATION).abs() < f32::EPSILON, "Should reset to WAVE_BREAK_DURATION");
+    }
+
+    // ============================================================
+    // TimeScale Tests
+    // ============================================================
 
     #[test]
     fn test_timescale_default_is_one() {

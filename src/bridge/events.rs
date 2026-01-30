@@ -80,6 +80,8 @@ pub fn summon_unit(
     trigger: Trigger<UnitSummonEvent>,
     mut commands: Commands,
     mut grid: ResMut<BattleGrid>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     existing_units: Query<(Entity, &UnitType, &StarRank, &HexPosition), With<Unit>>,
 ) {
     let event = trigger.event();
@@ -105,7 +107,7 @@ pub fn summon_unit(
             commands.entity(e2).despawn_recursive();
 
             if let Some(new_pos) = grid.find_empty_position() {
-                spawn_unit_at(&mut commands, &mut grid, event.unit_type, new_star, new_pos, Team::Player);
+                spawn_unit_at(&mut commands, &mut grid, event.unit_type, new_star, new_pos, Team::Player, &mut meshes, &mut materials);
 
                 // Trigger slow motion for ★3 evolution (epic moment!)
                 if new_star == 3 {
@@ -120,7 +122,7 @@ pub fn summon_unit(
     }
 
     if let Some(pos) = grid.find_empty_position() {
-        spawn_unit_at(&mut commands, &mut grid, event.unit_type, event.star_rank, pos, Team::Player);
+        spawn_unit_at(&mut commands, &mut grid, event.unit_type, event.star_rank, pos, Team::Player, &mut meshes, &mut materials);
     }
 }
 
@@ -131,11 +133,21 @@ fn spawn_unit_at(
     star_rank: u8,
     pos: HexPosition,
     team: Team,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
     let stats = UnitStats::for_type(unit_type, star_rank);
     let world_pos = grid.axial_to_pixel(&pos);
 
     let size = 30.0 + (star_rank as f32 * 5.0);
+    let half = size / 2.0;
+
+    // Player units: upward triangle (▲)
+    let triangle = Triangle2d::new(
+        Vec2::new(0.0, half),      // top
+        Vec2::new(-half, -half),   // bottom-left
+        Vec2::new(half, -half),    // bottom-right
+    );
 
     let entity = commands
         .spawn((
@@ -147,11 +159,8 @@ fn spawn_unit_at(
             team,
             Target(None),
             AttackCooldown(0.0),
-            Sprite {
-                color: unit_type.color(),
-                custom_size: Some(Vec2::splat(size)),
-                ..default()
-            },
+            Mesh2d(meshes.add(triangle)),
+            MeshMaterial2d(materials.add(ColorMaterial::from_color(unit_type.color()))),
             Transform::from_translation(world_pos.extend(1.0)),
         ))
         .id();
