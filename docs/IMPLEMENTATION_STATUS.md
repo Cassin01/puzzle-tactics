@@ -1,7 +1,7 @@
 # Pazzle Tactics - Implementation Status
 
 > **Version**: 1.0.0
-> **Last Updated**: 2026-01-29
+> **Last Updated**: 2026-01-30
 > **Status**: Alpha (Core Systems Implemented)
 
 ## Project Overview
@@ -278,13 +278,19 @@ Idle → Cascading → Idle (cascade loop)
 
 | Feature | Notes |
 |---------|-------|
-| Pause Menu | UI defined, interactions not implemented |
 | Save/Load | No persistence system |
-| Animations/Particles | No visual effects |
 | Mobile Touch | Native only |
 | Multiplayer | Single player only |
 | Shop/Unit Selection | No economy system |
 | 3★ Enemies | Maximum enemy rank is 2★ |
+
+### Recently Completed (Phase 3A)
+
+| Feature | Status |
+|---------|--------|
+| Pause Menu | ✅ ESC to pause, resume, quit options |
+| Swap Animation | ✅ Smooth easing (ease_out_cubic) |
+| Damage Popup Colors | ✅ Color-coded by type (normal/critical/heal) |
 
 ---
 
@@ -305,11 +311,41 @@ cargo build --target wasm32-unknown-unknown
 
 ## Next Steps (Recommended Priority)
 
+### Phase 3B - Critical Improvements (Highest Priority)
+
+> Focus: Prevent frustration, balance skill vs luck, enable learning
+
+| Feature | Purpose | Details |
+|---------|---------|---------|
+| **Slow Motion on Key Events** | Prevent missing important moments | Slow down during unit evolution, big combos, near-death saves |
+| **3-Tile Preview** | Balance luck vs skill | Show next 3 tiles to spawn, allowing strategic planning |
+| **Defeat Replay** | Enable learning from mistakes | Auto-save last 30 seconds, replay on game over |
+
+### Phase 3C - High Priority Enhancements
+
+> Focus: Increase strategic depth and immersion
+
+| Feature | Purpose | Details |
+|---------|---------|---------|
+| **Draft Phase** | Team composition diversity | Choose 1 of 3 units at wave start |
+| **Wave Break Time** | Reduce cognitive load | 5-second pause between waves for repositioning |
+| **Unit Voice/Evolution FX** | Emotional connection | Voice lines on summon, visual effects on star upgrade |
+
+### Phase 4 - Medium Priority (Future Roadmap)
+
+> Focus: Social features and world-building
+
+| Feature | Purpose | Details |
+|---------|---------|---------|
+| **Ghost Army (Async PvP)** | Social competition | Fight recorded enemy patterns, leaderboards |
+| **World-building Enhancement** | Narrative depth | Lore entries, unit backstories, campaign mode |
+| **Order/Chaos Gauge** | Strategic meta-layer | Global meter affecting gameplay modifiers |
+
+### Ongoing (From Previous Phases)
+
 1. **Critical/Defense Calculation** - Enable existing stats in damage formula
 2. **Ability System Completion** - Implement remaining unit abilities
-3. **Pause Menu Functionality** - ESC to pause, resume, quit options
-4. **Basic Sound Effects** - Match, attack, victory/defeat sounds
-5. **Visual Polish** - Tile swap animations, damage numbers
+3. **Basic Sound Effects** - Match, attack, victory/defeat sounds
 
 ---
 

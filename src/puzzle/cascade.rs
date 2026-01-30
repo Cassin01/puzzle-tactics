@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::bridge::ManaSupplyEvent;
-use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched};
+use crate::battle::BattleStats;
+use super::{PuzzleBoard, Tile, TileType, GridPosition, Matched, TilePreview};
 use super::input::SwapAnimation;
 
 #[derive(Resource, Default)]
@@ -15,11 +16,15 @@ pub fn start_cascade(
     mut next_phase: ResMut<NextState<PhaseState>>,
     matched: Query<Entity, With<Matched>>,
     mut combo: ResMut<ComboCounter>,
+    mut battle_stats: ResMut<BattleStats>,
 ) {
     if !matched.is_empty() {
         cascade_state.has_matches = true;
         cascade_state.pending_gravity = true;
         combo.increment();
+        // Record combo and match stats
+        battle_stats.update_combo(combo.current);
+        battle_stats.record_match();
         next_phase.set(PhaseState::Cascading);
     }
 }
@@ -67,6 +72,7 @@ pub fn spawn_new_tiles(
     mut commands: Commands,
     mut board: ResMut<PuzzleBoard>,
     mut cascade_state: ResMut<CascadeState>,
+    mut tile_preview: ResMut<TilePreview>,
 ) {
     if !cascade_state.pending_spawn {
         return;
@@ -75,7 +81,7 @@ pub fn spawn_new_tiles(
     for x in 0..PUZZLE_BOARD_SIZE {
         for y in 0..PUZZLE_BOARD_SIZE {
             if board.get(x, y).is_none() {
-                let tile_type = TileType::random();
+                let tile_type = tile_preview.consume_next();
                 let pos = board.grid_to_world(x, y);
 
                 let entity = commands

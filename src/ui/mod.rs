@@ -1,5 +1,6 @@
 mod hud;
 mod pause_menu;
+mod game_over_summary;
 
 use crate::prelude::*;
 
@@ -15,12 +16,17 @@ impl Plugin for UIPlugin {
                     hud::update_wave_display,
                     hud::update_synergy_display,
                     hud::update_combo_display,
+                    hud::update_preview_display,
                 )
                     .run_if(in_state(GameState::Playing)),
             )
             .add_systems(
                 Update,
-                hud::show_game_over_screen.run_if(in_state(GameState::GameOver)),
+                (
+                    hud::show_game_over_screen,
+                    game_over_summary::spawn_game_over_summary,
+                )
+                    .run_if(in_state(GameState::GameOver)),
             )
             .add_systems(
                 Update,

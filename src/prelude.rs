@@ -1,5 +1,5 @@
 pub use bevy::prelude::*;
-pub use crate::state::{GameState, PhaseState, ComboCounter};
+pub use crate::state::{GameState, PhaseState, ComboCounter, TimeScale, SlowMoEvent};
 
 // Shared types from puzzle module (re-exported for battle module to avoid direct dependency)
 pub use crate::puzzle::{TileType, ObstacleType, GridPosition, Obstacle, PuzzleBoard};

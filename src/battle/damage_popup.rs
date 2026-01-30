@@ -13,6 +13,12 @@ pub struct DamagePopupEvent {
     pub is_critical: bool,
 }
 
+#[derive(Event)]
+pub struct HealPopupEvent {
+    pub position: Vec3,
+    pub amount: i32,
+}
+
 pub fn spawn_damage_popup(
     trigger: Trigger<DamagePopupEvent>,
     mut commands: Commands,
@@ -20,11 +26,8 @@ pub fn spawn_damage_popup(
     let event = trigger.event();
     let spawn_pos = event.position + Vec3::new(0.0, 20.0, 10.0);
 
-    let (color, font_size) = if event.is_critical {
-        (Color::srgb(1.0, 0.2, 0.2), 32.0)
-    } else {
-        (Color::srgb(1.0, 1.0, 1.0), 24.0)
-    };
+    let color = get_damage_color(event.is_critical);
+    let font_size = get_popup_font_size(event.is_critical);
 
     commands.spawn((
         Text2d::new(format!("{}", event.damage)),
@@ -35,7 +38,32 @@ pub fn spawn_damage_popup(
         TextColor(color),
         Transform::from_translation(spawn_pos),
         DamagePopup {
-            timer: Timer::from_seconds(0.5, TimerMode::Once),
+            timer: Timer::from_seconds(POPUP_DURATION, TimerMode::Once),
+            start_pos: spawn_pos,
+        },
+    ));
+}
+
+pub fn spawn_heal_popup(
+    trigger: Trigger<HealPopupEvent>,
+    mut commands: Commands,
+) {
+    let event = trigger.event();
+    let spawn_pos = event.position + Vec3::new(0.0, 20.0, 10.0);
+
+    let color = get_heal_color();
+    let font_size = NORMAL_FONT_SIZE;
+
+    commands.spawn((
+        Text2d::new(format!("+{}", event.amount)),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(color),
+        Transform::from_translation(spawn_pos),
+        DamagePopup {
+            timer: Timer::from_seconds(POPUP_DURATION, TimerMode::Once),
             start_pos: spawn_pos,
         },
     ));
@@ -67,6 +95,11 @@ pub const POPUP_FLOAT_DISTANCE: f32 = 50.0;
 pub const CRITICAL_FONT_SIZE: f32 = 32.0;
 pub const NORMAL_FONT_SIZE: f32 = 24.0;
 
+// Color constants
+pub const DAMAGE_COLOR: Color = Color::WHITE;
+pub const CRITICAL_COLOR: Color = Color::srgb(1.0, 0.84, 0.0);
+pub const HEAL_COLOR: Color = Color::srgb(0.2, 0.9, 0.2);
+
 /// Calculate the Y offset for damage popup based on animation progress
 pub fn calculate_popup_y_offset(progress: f32) -> f32 {
     progress * POPUP_FLOAT_DISTANCE
@@ -84,6 +117,20 @@ pub fn get_popup_font_size(is_critical: bool) -> f32 {
     } else {
         NORMAL_FONT_SIZE
     }
+}
+
+/// Get damage popup color based on critical hit status
+pub fn get_damage_color(is_critical: bool) -> Color {
+    if is_critical {
+        CRITICAL_COLOR
+    } else {
+        DAMAGE_COLOR
+    }
+}
+
+/// Get heal popup color
+pub fn get_heal_color() -> Color {
+    HEAL_COLOR
 }
 
 #[cfg(test)]
@@ -133,5 +180,27 @@ mod tests {
     #[test]
     fn test_popup_duration_is_half_second() {
         assert_eq!(POPUP_DURATION, 0.5);
+    }
+
+    // === Color Tests (TDD: RED → GREEN) ===
+
+    #[test]
+    fn test_normal_damage_color_is_white() {
+        let color = get_damage_color(false);
+        assert_eq!(color, Color::WHITE);
+    }
+
+    #[test]
+    fn test_critical_damage_color_is_gold() {
+        let color = get_damage_color(true);
+        // Gold color: RGB(1.0, 0.84, 0.0)
+        assert_eq!(color, Color::srgb(1.0, 0.84, 0.0));
+    }
+
+    #[test]
+    fn test_heal_color_is_green() {
+        let color = get_heal_color();
+        // Green color: RGB(0.2, 0.9, 0.2)
+        assert_eq!(color, Color::srgb(0.2, 0.9, 0.2));
     }
 }
