@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::prelude::WindowSize;
 use super::tile::{Tile, TileType, GridPosition, ObstacleType};
 
 #[derive(Resource)]
@@ -16,8 +17,8 @@ impl Default for PuzzleBoard {
             obstacles: [[None; PUZZLE_BOARD_SIZE]; PUZZLE_BOARD_SIZE],
             tile_size: TILE_SIZE,
             origin: Vec2::new(
+                WINDOW_WIDTH / 4.0 - ((PUZZLE_BOARD_SIZE as f32 * (TILE_SIZE + TILE_GAP)) / 2.0) + (TILE_SIZE / 2.0),
                 -((PUZZLE_BOARD_SIZE as f32 * (TILE_SIZE + TILE_GAP)) / 2.0) + (TILE_SIZE / 2.0),
-                -WINDOW_HEIGHT / 2.0 + TILE_SIZE / 2.0 + 20.0,
             ),
         }
     }
@@ -26,6 +27,19 @@ impl Default for PuzzleBoard {
 pub const CORE_POSITIONS: [(usize, usize); 4] = [(3, 3), (3, 4), (4, 3), (4, 4)];
 
 impl PuzzleBoard {
+    /// Calculate origin based on window width (puzzle board on right side)
+    pub fn calculate_origin(window_width: f32) -> Vec2 {
+        Vec2::new(
+            window_width / 4.0 - ((PUZZLE_BOARD_SIZE as f32 * (TILE_SIZE + TILE_GAP)) / 2.0) + (TILE_SIZE / 2.0),
+            -((PUZZLE_BOARD_SIZE as f32 * (TILE_SIZE + TILE_GAP)) / 2.0) + (TILE_SIZE / 2.0),
+        )
+    }
+
+    /// Update origin based on new window dimensions
+    pub fn update_origin(&mut self, window_width: f32, _window_height: f32) {
+        self.origin = Self::calculate_origin(window_width);
+    }
+
     pub fn is_core_position(x: usize, y: usize) -> bool {
         CORE_POSITIONS.contains(&(x, y))
     }
@@ -102,6 +116,30 @@ impl PuzzleBoard {
 
     pub fn clear_obstacle(&mut self, x: usize, y: usize) {
         self.set_obstacle(x, y, None);
+    }
+}
+
+/// System to update puzzle board origin when window size changes
+pub fn update_puzzle_board_on_resize(
+    window_size: Res<WindowSize>,
+    mut board: ResMut<PuzzleBoard>,
+) {
+    if window_size.is_changed() {
+        board.update_origin(window_size.width, window_size.height);
+    }
+}
+
+/// System to reposition tiles when board origin changes
+pub fn reposition_tiles_on_resize(
+    board: Res<PuzzleBoard>,
+    mut tiles: Query<(&GridPosition, &mut Transform), With<Tile>>,
+) {
+    if board.is_changed() {
+        for (grid_pos, mut transform) in tiles.iter_mut() {
+            let new_pos = board.grid_to_world(grid_pos.x, grid_pos.y);
+            transform.translation.x = new_pos.x;
+            transform.translation.y = new_pos.y;
+        }
     }
 }
 

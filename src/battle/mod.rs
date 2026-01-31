@@ -40,6 +40,13 @@ impl Plugin for BattlePlugin {
             .add_systems(
                 Update,
                 (
+                    hex_grid::update_battle_grid_on_resize,
+                    hex_grid::reposition_units_on_resize,
+                ),
+            )
+            .add_systems(
+                Update,
+                (
                     wave::wave_spawner_system,
                     wave::bomb_countdown_system,
                     wave::check_wave_complete_system,

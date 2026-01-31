@@ -29,6 +29,13 @@ impl Plugin for PuzzlePlugin {
             .add_systems(
                 Update,
                 (
+                    board::update_puzzle_board_on_resize,
+                    board::reposition_tiles_on_resize,
+                ),
+            )
+            .add_systems(
+                Update,
+                (
                     input::handle_tile_click,
                     input::animate_swap,
                     input::animate_ice_shake,

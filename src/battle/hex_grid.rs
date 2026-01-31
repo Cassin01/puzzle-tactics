@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::prelude::WindowSize;
 use std::collections::HashMap;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -43,8 +44,18 @@ impl BattleGrid {
         Self {
             units: HashMap::new(),
             hex_size: HEX_SIZE,
-            origin: Vec2::new(0.0, WINDOW_HEIGHT / 2.0 - 150.0),
+            origin: Vec2::new(-WINDOW_WIDTH / 4.0, 0.0),
         }
+    }
+
+    /// Calculate origin based on window width (battle grid on left side)
+    pub fn calculate_origin(window_width: f32) -> Vec2 {
+        Vec2::new(-window_width / 4.0, 0.0)
+    }
+
+    /// Update origin based on new window dimensions
+    pub fn update_origin(&mut self, window_width: f32) {
+        self.origin = Self::calculate_origin(window_width);
     }
 
     pub fn axial_to_pixel(&self, pos: &HexPosition) -> Vec2 {
@@ -129,4 +140,28 @@ fn axial_round(q: f32, r: f32) -> HexPosition {
 
 pub fn setup_battle_grid(mut commands: Commands) {
     commands.insert_resource(BattleGrid::new());
+}
+
+/// System to update battle grid origin when window size changes
+pub fn update_battle_grid_on_resize(
+    window_size: Res<WindowSize>,
+    mut grid: ResMut<BattleGrid>,
+) {
+    if window_size.is_changed() {
+        grid.update_origin(window_size.width);
+    }
+}
+
+/// System to reposition units when grid origin changes
+pub fn reposition_units_on_resize(
+    grid: Res<BattleGrid>,
+    mut units: Query<(&HexPosition, &mut Transform)>,
+) {
+    if grid.is_changed() {
+        for (hex_pos, mut transform) in units.iter_mut() {
+            let new_pos = grid.axial_to_pixel(hex_pos);
+            transform.translation.x = new_pos.x;
+            transform.translation.y = new_pos.y;
+        }
+    }
 }
