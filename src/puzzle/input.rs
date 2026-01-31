@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::camera::MainCamera;
-use super::{PuzzleBoard, Tile, GridPosition, Selected};
+use super::{PuzzleBoard, Tile, GridPosition, Selected, TileType};
+use super::match_detector::would_match_after_swap;
 
 const SWAP_DURATION: f32 = 0.2;
 
@@ -22,6 +23,21 @@ pub struct IceShakeAnimation {
     pub shake_count: u8,
 }
 
+/// Event triggered when player attempts an invalid swap (no match would result)
+#[derive(Event)]
+pub struct InvalidSwapEvent {
+    pub pos1: (usize, usize),
+    pub pos2: (usize, usize),
+}
+
+/// Shake animation for invalid swap feedback
+#[derive(Component)]
+pub struct InvalidSwapShakeAnimation {
+    pub original_pos: Vec2,
+    pub timer: Timer,
+    pub shake_count: u8,
+}
+
 pub fn handle_tile_click(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -29,7 +45,7 @@ pub fn handle_tile_click(
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     board: Res<PuzzleBoard>,
     mut selected: Local<Option<(usize, usize)>>,
-    tiles: Query<(Entity, &GridPosition), With<Tile>>,
+    tiles: Query<(Entity, &GridPosition, &TileType), With<Tile>>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) {
         return;
@@ -56,7 +72,7 @@ pub fn handle_tile_click(
         return;
     }
 
-    for (entity, _) in tiles.iter() {
+    for (entity, _, _) in tiles.iter() {
         commands.entity(entity).remove::<Selected>();
     }
 
@@ -67,7 +83,21 @@ pub fn handle_tile_click(
             return;
         }
         if is_adjacent(prev, (x, y)) {
-            commands.trigger(SwapTilesEvent { from: prev, to: (x, y) });
+            // Build grid from current tiles for match prediction
+            let tile_data: Vec<_> = tiles.iter().collect();
+            let mut grid: [[Option<TileType>; PUZZLE_BOARD_SIZE]; PUZZLE_BOARD_SIZE] =
+                [[None; PUZZLE_BOARD_SIZE]; PUZZLE_BOARD_SIZE];
+            for (_, pos, tile_type) in &tile_data {
+                grid[pos.y][pos.x] = Some(**tile_type);
+            }
+
+            // Check if swap would create a match
+            if would_match_after_swap(&grid, prev, (x, y)) {
+                commands.trigger(SwapTilesEvent { from: prev, to: (x, y) });
+            } else {
+                // Invalid swap - trigger shake feedback on both tiles
+                commands.trigger(InvalidSwapEvent { pos1: prev, pos2: (x, y) });
+            }
         }
         *selected = None;
     } else {
@@ -173,6 +203,56 @@ pub fn animate_ice_shake(
                 transform.translation.x = anim.original_pos.x;
                 transform.translation.y = anim.original_pos.y;
                 commands.entity(entity).remove::<IceShakeAnimation>();
+            } else {
+                // Alternate shake direction
+                let offset = if anim.shake_count % 2 == 0 { SHAKE_OFFSET } else { -SHAKE_OFFSET };
+                transform.translation.x = anim.original_pos.x + offset;
+            }
+        }
+    }
+}
+
+/// Handle invalid swap event - add shake animation to both tiles
+pub fn handle_invalid_swap(
+    trigger: Trigger<InvalidSwapEvent>,
+    mut commands: Commands,
+    board: Res<PuzzleBoard>,
+) {
+    let event = trigger.event();
+
+    // Add shake animation to both tiles
+    for pos in [event.pos1, event.pos2] {
+        if let Some(entity) = board.get(pos.0, pos.1) {
+            let tile_pos = board.grid_to_world(pos.0, pos.1);
+            commands.entity(entity).insert(InvalidSwapShakeAnimation {
+                original_pos: tile_pos,
+                timer: Timer::from_seconds(0.05, TimerMode::Repeating),
+                shake_count: 0,
+            });
+        }
+    }
+}
+
+/// Animate invalid swap shake feedback
+pub fn animate_invalid_swap_shake(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Transform, &mut InvalidSwapShakeAnimation)>,
+) {
+    const MAX_SHAKES: u8 = 6;
+    const SHAKE_OFFSET: f32 = 4.0;
+
+    for (entity, mut transform, mut anim) in query.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        if anim.timer.just_finished() {
+            anim.shake_count += 1;
+
+            if anim.shake_count >= MAX_SHAKES {
+                // Reset to original position and remove animation
+                transform.translation.x = anim.original_pos.x;
+                transform.translation.y = anim.original_pos.y;
+                commands.entity(entity).remove::<InvalidSwapShakeAnimation>();
             } else {
                 // Alternate shake direction
                 let offset = if anim.shake_count % 2 == 0 { SHAKE_OFFSET } else { -SHAKE_OFFSET };

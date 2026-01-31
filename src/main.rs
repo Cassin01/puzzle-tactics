@@ -6,7 +6,7 @@ fn main() {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Puzzle Tactics".into(),
-                resolution: (800.0, 900.0).into(),
+                resolution: (800.0, 1100.0).into(),
                 resizable: false,
                 ..default()
             }),

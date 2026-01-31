@@ -25,12 +25,14 @@ impl Plugin for PuzzlePlugin {
             .init_resource::<preview::TilePreview>()
             .add_systems(Startup, board::setup_puzzle_board)
             .add_observer(input::handle_tile_swap)
+            .add_observer(input::handle_invalid_swap)
             .add_systems(
                 Update,
                 (
                     input::handle_tile_click,
                     input::animate_swap,
                     input::animate_ice_shake,
+                    input::animate_invalid_swap_shake,
                     highlight_selected_tile,
                     match_detector::detect_matches,
                     cascade::start_cascade,

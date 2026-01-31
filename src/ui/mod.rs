@@ -1,6 +1,7 @@
 mod hud;
 mod pause_menu;
 mod game_over_summary;
+mod wavebreak_countdown;
 
 use crate::prelude::*;
 
@@ -42,6 +43,14 @@ impl Plugin for UIPlugin {
                     pause_menu::handle_quit_button,
                 )
                     .run_if(in_state(GameState::Paused)),
+            )
+            // WaveBreak countdown UI
+            .add_systems(OnEnter(PhaseState::WaveBreak), wavebreak_countdown::spawn_wavebreak_countdown)
+            .add_systems(OnExit(PhaseState::WaveBreak), wavebreak_countdown::despawn_wavebreak_countdown)
+            .add_systems(
+                Update,
+                wavebreak_countdown::update_wavebreak_countdown
+                    .run_if(in_state(PhaseState::WaveBreak)),
             );
     }
 }

@@ -63,8 +63,16 @@ pub fn wave_spawner_system(
     mut wave_manager: ResMut<WaveManager>,
     mut commands: Commands,
     mut grid: ResMut<BattleGrid>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     enemy_units: Query<Entity, (With<Unit>, With<Team>)>,
+    current_phase: Res<State<PhaseState>>,
 ) {
+    // WaveBreak中はWave処理を停止（配置時間を確保）
+    if *current_phase.get() == PhaseState::WaveBreak {
+        return;
+    }
+
     let _enemy_count = enemy_units.iter().count();
 
     if !wave_manager.wave_active {
@@ -90,7 +98,7 @@ pub fn wave_spawner_system(
     if let Some(pos) = find_enemy_spawn_position(&grid) {
         let unit_type = WaveManager::random_enemy_type();
         let star_rank = wave_manager.enemy_star_rank(wave_manager.current_wave);
-        spawn_enemy_unit(&mut commands, &mut grid, unit_type, star_rank, pos);
+        spawn_enemy_unit(&mut commands, &mut grid, unit_type, star_rank, pos, &mut meshes, &mut materials);
         wave_manager.enemies_remaining -= 1;
         wave_manager.spawn_delay = 0.8;
     }
@@ -114,13 +122,23 @@ fn spawn_enemy_unit(
     unit_type: TileType,
     star_rank: u8,
     pos: HexPosition,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
     let stats = UnitStats::for_type(unit_type, star_rank);
     let world_pos = grid.axial_to_pixel(&pos);
     let size = 30.0 + (star_rank as f32 * 5.0);
+    let half = size / 2.0;
 
     let mut color = unit_type.color();
     color = color.darker(0.3);
+
+    // Enemy units: downward triangle (▼)
+    let triangle = Triangle2d::new(
+        Vec2::new(0.0, -half),     // bottom
+        Vec2::new(half, half),     // top-right
+        Vec2::new(-half, half),    // top-left
+    );
 
     let entity = commands
         .spawn((
@@ -132,11 +150,8 @@ fn spawn_enemy_unit(
             Team::Enemy,
             Target(None),
             AttackCooldown(0.0),
-            Sprite {
-                color,
-                custom_size: Some(Vec2::splat(size)),
-                ..default()
-            },
+            Mesh2d(meshes.add(triangle)),
+            MeshMaterial2d(materials.add(ColorMaterial::from_color(color))),
             Transform::from_translation(world_pos.extend(1.0)),
         ))
         .id();
@@ -254,5 +269,121 @@ pub fn handle_bomb_damage(
     // Apply damage to player units (simplified: damage all friendly units)
     for mut stats in player_units.iter_mut() {
         stats.health = (stats.health - damage).max(0.0);
+    }
+}
+
+// ============================================================
+// Wave Break Transition System
+// ============================================================
+
+/// Event triggered when wave is complete and break should start
+#[derive(Event)]
+pub struct WaveBreakStartEvent;
+
+/// Event triggered when wave break ends
+#[derive(Event)]
+pub struct WaveBreakEndEvent;
+
+/// System to check if wave is complete and transition to WaveBreak
+pub fn check_wave_complete_system(
+    wave_manager: Res<WaveManager>,
+    all_units: Query<Entity, (With<Unit>, With<Team>)>,
+    team_query: Query<&Team>,
+    current_phase: Res<State<PhaseState>>,
+    mut next_phase: ResMut<NextState<PhaseState>>,
+    mut wave_break_timer: ResMut<WaveBreakTimer>,
+    mut commands: Commands,
+) {
+    // Only check in Idle phase when wave was active
+    if *current_phase.get() != PhaseState::Idle {
+        return;
+    }
+
+    // Check if wave just ended (no enemies remaining and wave was active)
+    if !wave_manager.wave_active && wave_manager.enemies_remaining == 0 && wave_manager.current_wave > 0 {
+        // Count remaining ENEMY units only (not player units)
+        let enemy_count = all_units
+            .iter()
+            .filter(|e| team_query.get(*e).map_or(false, |t| *t == Team::Enemy))
+            .count();
+
+        if enemy_count == 0 {
+            // All enemies defeated, start wave break
+            wave_break_timer.reset();
+            next_phase.set(PhaseState::WaveBreak);
+            commands.trigger(WaveBreakStartEvent);
+        }
+    }
+}
+
+/// System to update wave break timer and transition back to Idle
+pub fn wave_break_timer_system(
+    time: Res<Time>,
+    mut wave_break_timer: ResMut<WaveBreakTimer>,
+    current_phase: Res<State<PhaseState>>,
+    mut next_phase: ResMut<NextState<PhaseState>>,
+    mut wave_manager: ResMut<WaveManager>,
+    mut commands: Commands,
+) {
+    // Only run during WaveBreak phase
+    if *current_phase.get() != PhaseState::WaveBreak {
+        return;
+    }
+
+    wave_break_timer.tick(time.delta_secs());
+
+    if wave_break_timer.is_finished() {
+        // Transition back to Idle and prepare next wave
+        next_phase.set(PhaseState::Idle);
+        wave_manager.wave_timer = 3.0; // Short delay before next wave
+        commands.trigger(WaveBreakEndEvent);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============================================================
+    // Enemy Count Logic Tests
+    // ============================================================
+
+    #[test]
+    fn test_team_enemy_filter_logic() {
+        // This tests the logic used in check_wave_complete_system
+        // Only Team::Enemy should be counted, not Team::Player
+        let teams = vec![Team::Player, Team::Enemy, Team::Player, Team::Enemy, Team::Enemy];
+        let enemy_count = teams.iter().filter(|t| **t == Team::Enemy).count();
+        assert_eq!(enemy_count, 3, "Should count only Enemy units");
+    }
+
+    #[test]
+    fn test_team_enemy_filter_with_no_enemies() {
+        // When all enemies are defeated but player units remain
+        let teams = vec![Team::Player, Team::Player, Team::Player];
+        let enemy_count = teams.iter().filter(|t| **t == Team::Enemy).count();
+        assert_eq!(enemy_count, 0, "Should be 0 when no enemies remain");
+    }
+
+    // ============================================================
+    // WaveManager Tests
+    // ============================================================
+
+    #[test]
+    fn test_wave_manager_enemies_for_wave() {
+        let wm = WaveManager::default();
+        assert_eq!(wm.enemies_for_wave(0), 3);
+        assert_eq!(wm.enemies_for_wave(1), 5);
+        assert_eq!(wm.enemies_for_wave(5), 12);
+        assert_eq!(wm.enemies_for_wave(10), 12); // Max capped at 12
+    }
+
+    #[test]
+    fn test_wave_manager_start_wave() {
+        let mut wm = WaveManager::default();
+        wm.start_wave(1);
+        assert_eq!(wm.current_wave, 1);
+        assert!(wm.wave_active);
+        assert_eq!(wm.enemies_remaining, 5); // 3 + 1*2 = 5
     }
 }
